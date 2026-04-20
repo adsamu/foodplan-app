@@ -1,5 +1,5 @@
 [versions]
-agp = "8.9.2"
+agp = "8.13.2"
 kotlin = "2.2.10"
 ksp = "2.2.10-2.0.2"
 coreKtx = "1.16.0"
@@ -15,6 +15,8 @@ hiltNavigationCompose = "1.2.0"
 room = "2.7.1"
 firebaseBom = "34.12.0"
 coroutines = "1.10.2"
+kotlinxDatetime = "0.6.0"
+coreKtxVersion = "1.18.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -52,6 +54,8 @@ firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
+kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
+core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtxVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

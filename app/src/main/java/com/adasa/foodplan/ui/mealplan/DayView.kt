@@ -1,0 +1,174 @@
+package com.adasa.foodplan.ui.mealplan
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
+
+private val CardBg      = Color(0xFFF3EDF7)
+private val IconBoxBg   = Color(0xFFEADDFF)
+private val PurpleText  = Color(0xFF21005D)
+private val MutedText   = Color(0xFF79747E)
+private val PowderBg    = Color(0xFFE8DEF8)
+
+@Composable
+fun DayView(
+    state: DayUiState?,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onMealClick: (String) -> Unit
+) {
+    if (state == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Day navigator
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = onPrevious) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = "Previous day",
+                        tint = Color(0xFF49454F), modifier = Modifier.size(18.dp))
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = formatDate(state.date),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF1D1B20)
+                    )
+                    Text(
+                        text = "Week ${isoWeek(state.date)} · ${dayTypeLabel(state.dayType)} · ${state.kcalTarget} kcal target",
+                        fontSize = 11.sp,
+                        color = MutedText
+                    )
+                }
+                IconButton(onClick = onNext) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = "Next day",
+                        tint = Color(0xFF49454F), modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+
+        // Meal cards
+        if (state.meals.isEmpty()) {
+            item {
+                Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(CardBg).padding(20.dp), contentAlignment = Alignment.Center) {
+                    Text("No meals planned for this day", fontSize = 13.sp, color = MutedText)
+                }
+            }
+        } else {
+            items(state.meals) { slot ->
+                MealCard(slot, onClick = { onMealClick(slot.recipeId) })
+            }
+        }
+
+        // Protein powder row
+        if (state.proteinPowderGrams > 0) {
+            item { ProteinPowderRow(state.proteinPowderGrams, state.kcalTarget, state.nutrition.kcal) }
+        }
+
+        item { Spacer(Modifier.height(8.dp)) }
+    }
+}
+
+@Composable
+private fun MealCard(slot: MealSlotUi, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(CardBg)
+            .clickable { onClick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(IconBoxBg),
+            contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Restaurant, contentDescription = null,
+                tint = PurpleText, modifier = Modifier.size(20.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(slot.type.displayName.uppercase(), fontSize = 10.sp, color = MutedText,
+                letterSpacing = 0.6.sp)
+            Text(slot.recipeName, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                color = Color(0xFF1D1B20), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 1.dp))
+            Text("${slot.protein.toInt()}g P · ${slot.fat.toInt()}g F · ${slot.carbs.toInt()}g C",
+                fontSize = 11.sp, color = MutedText, modifier = Modifier.padding(top = 2.dp))
+        }
+        Text("${slot.kcal.toInt()}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF49454F))
+    }
+}
+
+@Composable
+private fun ProteinPowderRow(grams: Double, kcalTarget: Int, kcalActual: Double) {
+    val extraKcal  = grams * 3.54  // ~354 kcal/100g protein powder
+    val extraProt  = grams * 0.72  // ~72g protein/100g
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(PowderBg)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(Icons.Default.FitnessCenter, contentDescription = null,
+            tint = PurpleText, modifier = Modifier.size(24.dp))
+        Column {
+            Text("Core Protein Pro — ${grams}g", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PurpleText)
+            Text("+${extraProt.toInt()}g protein · +${extraKcal.toInt()} kcal to hit goal",
+                fontSize = 11.sp, color = Color(0xFF49454F), modifier = Modifier.padding(top = 1.dp))
+        }
+    }
+}
+
+private fun formatDate(date: LocalDate): String {
+    val dayName = when (date.dayOfWeek) {
+        DayOfWeek.MONDAY    -> "Monday";    DayOfWeek.TUESDAY  -> "Tuesday"
+        DayOfWeek.WEDNESDAY -> "Wednesday"; DayOfWeek.THURSDAY -> "Thursday"
+        DayOfWeek.FRIDAY    -> "Friday";    DayOfWeek.SATURDAY -> "Saturday"
+        else                -> "Sunday"
+    }
+    val monthName = date.month.name.lowercase().replaceFirstChar { it.uppercase() }
+    return "$dayName, ${date.dayOfMonth} $monthName"
+}
+
+private fun dayTypeLabel(t: DayType) = when (t) {
+    DayType.WEEKDAY -> "Weekday"; DayType.WEEKEND -> "Weekend"; DayType.SUNDAY -> "Shopping day"
+}
+
+private fun isoWeek(date: LocalDate): Int {
+    val j = java.time.LocalDate.of(date.year, date.monthNumber, date.dayOfMonth)
+    return j.get(java.time.temporal.WeekFields.ISO.weekOfWeekBasedYear())
+}

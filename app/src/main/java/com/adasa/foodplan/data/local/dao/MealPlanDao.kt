@@ -31,4 +31,14 @@ interface MealPlanDao {
 
     @Delete
     suspend fun deleteMealPlan(mealPlan: MealPlanEntity)
+
+    // Epoch-day params avoid TypeConverter issues with query parameters
+    @Query("SELECT * FROM day_plans WHERE date = :dateEpoch LIMIT 1")
+    suspend fun getDayPlanByDate(dateEpoch: Long): DayPlanEntity?
+
+    @Query("SELECT * FROM day_plans WHERE date >= :startEpoch AND date <= :endEpoch ORDER BY date ASC")
+    suspend fun getDayPlansInRange(startEpoch: Long, endEpoch: Long): List<DayPlanEntity>
+
+    @Query("SELECT * FROM meal_slots WHERE dayPlanId IN (:dayPlanIds)")
+    suspend fun getMealSlotsForDayPlanIds(dayPlanIds: List<String>): List<MealSlotEntity>
 }

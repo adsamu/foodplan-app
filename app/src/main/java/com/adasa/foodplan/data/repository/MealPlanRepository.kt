@@ -11,6 +11,7 @@ import com.adasa.foodplan.domain.model.MealPlan
 import com.adasa.foodplan.domain.model.MealSlot
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.LocalDate
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -71,6 +72,26 @@ class MealPlanRepository @Inject constructor(
                     )
                 )
             }
+        }
+    }
+
+    suspend fun getDayPlanByDate(date: LocalDate): DayPlan? {
+        val entity = dao.getDayPlanByDate(date.toEpochDays().toLong()) ?: return null
+        val slots = dao.getMealSlotsForDayPlan(entity.id)
+        return entity.toDomain(slots)
+    }
+
+    /** Returns a map of date → DayPlan for every day that has a plan in [startDate, endDate]. */
+    suspend fun getDayPlansForRange(startDate: LocalDate, endDate: LocalDate): Map<LocalDate, DayPlan> {
+        val entities = dao.getDayPlansInRange(
+            startEpoch = startDate.toEpochDays().toLong(),
+            endEpoch = endDate.toEpochDays().toLong()
+        )
+        if (entities.isEmpty()) return emptyMap()
+        val slots = dao.getMealSlotsForDayPlanIds(entities.map { it.id })
+        val slotsByDayId = slots.groupBy { it.dayPlanId }
+        return entities.associate { entity ->
+            entity.date to entity.toDomain(slotsByDayId[entity.id] ?: emptyList())
         }
     }
 

@@ -7,6 +7,7 @@ data class Recipe(
     val mealCategories: Set<MealCategory> = emptySet(),
     val componentCategory: ComponentCategory? = null,
     val ingredients: List<RecipeIngredient> = emptyList(),
+    val steps: List<String> = emptyList(),
     val notes: String = ""
 )
 

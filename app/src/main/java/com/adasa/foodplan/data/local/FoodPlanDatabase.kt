@@ -22,7 +22,7 @@ import com.adasa.foodplan.data.local.entity.RecipeIngredientEntity
         DayPlanEntity::class,
         MealSlotEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

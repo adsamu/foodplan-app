@@ -34,4 +34,11 @@ class Converters {
     @TypeConverter
     fun toComponentCategory(value: String?): ComponentCategory? =
         value?.let { ComponentCategory.valueOf(it) }
+
+    @TypeConverter
+    fun fromSteps(steps: List<String>): String = steps.joinToString("|||")
+
+    @TypeConverter
+    fun toSteps(value: String): List<String> =
+        if (value.isEmpty()) emptyList() else value.split("|||")
 }

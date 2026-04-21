@@ -14,6 +14,7 @@ data class RecipeEntity(
     val type: RecipeType,
     val mealCategories: Set<MealCategory>,
     val componentCategory: ComponentCategory?,
+    val steps: List<String> = emptyList(),
     val notes: String
 ) {
     fun toDomain() = Recipe(
@@ -23,6 +24,7 @@ data class RecipeEntity(
         mealCategories = mealCategories,
         componentCategory = componentCategory,
         ingredients = emptyList(),
+        steps = steps,
         notes = notes
     )
 }
@@ -33,5 +35,6 @@ fun Recipe.toEntity() = RecipeEntity(
     type = type,
     mealCategories = mealCategories,
     componentCategory = componentCategory,
+    steps = steps,
     notes = notes
 )

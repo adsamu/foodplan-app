@@ -101,4 +101,18 @@ class RecipeRepository @Inject constructor(
         }
         return false
     }
+
+    suspend fun getAllMealRecipesWithIngredients(): List<Recipe> {
+        return recipeDao.getAllMealRecipesOnce().map { entity ->
+            val ingredients = recipeDao.getIngredientsForRecipe(entity.id).map {
+                RecipeIngredient(
+                    ingredientId = it.ingredientId,
+                    subRecipeId = it.subRecipeId,
+                    grams = it.grams,
+                    portions = it.portions
+                )
+            }
+            entity.toDomain().copy(ingredients = ingredients)
+        }
+    }
 }

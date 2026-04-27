@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RecipeDao {
+    @Query("SELECT * FROM recipes WHERE type = 'MEAL' ORDER BY name ASC")
+    suspend fun getAllMealRecipesOnce(): List<RecipeEntity>
     @Query("SELECT * FROM recipes ORDER BY name ASC")
     fun getAllRecipes(): Flow<List<RecipeEntity>>
 

@@ -7,6 +7,8 @@ sealed class Screen(val route: String) {
     data object Shopping : Screen("shopping")
     data object Profile : Screen("profile")
 
+    data object Settings : Screen("settings")
+
     // Detail / add-edit destinations (no bottom nav)
     data object RecipeDetail : Screen("recipe_detail/{recipeId}") {
         fun createRoute(recipeId: String) = "recipe_detail/$recipeId"
@@ -30,5 +32,5 @@ val topLevelRoutes = setOf(
     Screen.MealPlan.route,
     Screen.RecipeList.route,
     Screen.Shopping.route,
-    Screen.Profile.route
+    Screen.Settings.route
 )

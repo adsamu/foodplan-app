@@ -7,12 +7,14 @@ import com.adasa.foodplan.domain.model.RecipeType
 import kotlinx.datetime.LocalDate
 
 class Converters {
-    @TypeConverter
-    fun fromLocalDate(date: LocalDate): Long = date.toEpochDays().toLong()
+    // Remove fromLocalDate and toLocalDate — replaced by nullable versions below
 
     @TypeConverter
-    fun toLocalDate(epoch: Long): LocalDate = LocalDate.fromEpochDays(epoch.toInt())
+    fun fromNullableLocalDate(date: LocalDate?): Long? = date?.toEpochDays()?.toLong()
 
+    @TypeConverter
+    fun toNullableLocalDate(epoch: Long?): LocalDate? =
+        epoch?.let { LocalDate.fromEpochDays(it.toInt()) }
     @TypeConverter
     fun fromRecipeType(type: RecipeType): String = type.name
 

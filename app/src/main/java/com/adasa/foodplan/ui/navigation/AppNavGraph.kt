@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -31,6 +32,7 @@ import com.adasa.foodplan.ui.profile.ProfileScreen
 import com.adasa.foodplan.ui.recipe.AddEditRecipeScreen
 import com.adasa.foodplan.ui.recipe.RecipeDetailScreen
 import com.adasa.foodplan.ui.recipe.RecipeListScreen
+import com.adasa.foodplan.ui.settings.SettingsScreen
 import com.adasa.foodplan.ui.shopping.ShoppingScreen
 
 private data class NavItem(
@@ -49,8 +51,8 @@ private val navItems = listOf(
     NavItem(Screen.Shopping, "Shopping") {
         Icon(Icons.Default.ShoppingCart, contentDescription = "Shopping")
     },
-    NavItem(Screen.Profile, "Profile") {
-        Icon(Icons.Default.Person, contentDescription = "Profile")
+    NavItem(Screen.Settings, "Settings") {
+        Icon(Icons.Default.Settings, contentDescription = "Settings")
     }
 )
 
@@ -101,7 +103,13 @@ fun AppNavGraph(
                 )
             }
             composable(Screen.Shopping.route) { ShoppingScreen() }
-            composable(Screen.Profile.route) { ProfileScreen() }
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    onNavigateToAppSettings = {
+                        // future: open app settings bottom sheet
+                    }
+                )
+            }
 
             composable(Screen.RecipeList.route) {
                 RecipeListScreen(

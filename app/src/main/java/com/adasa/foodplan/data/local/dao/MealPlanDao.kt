@@ -5,9 +5,13 @@ import com.adasa.foodplan.data.local.entity.DayPlanEntity
 import com.adasa.foodplan.data.local.entity.MealPlanEntity
 import com.adasa.foodplan.data.local.entity.MealSlotEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.datetime.LocalDate
 
 @Dao
 interface MealPlanDao {
+
+    @Query("SELECT * FROM meal_plans WHERE startDate >= :from AND endDate <= :to")
+    suspend fun getMealPlansInRange(from: LocalDate, to: LocalDate): List<MealPlanEntity>
     @Query("SELECT * FROM meal_plans ORDER BY startDate ASC")
     fun getAllMealPlans(): Flow<List<MealPlanEntity>>
 

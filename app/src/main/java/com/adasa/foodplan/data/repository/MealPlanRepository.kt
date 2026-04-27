@@ -11,7 +11,12 @@ import com.adasa.foodplan.domain.model.MealPlan
 import com.adasa.foodplan.domain.model.MealSlot
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.todayIn
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -128,4 +133,17 @@ class MealPlanRepository @Inject constructor(
             )
         }
     )
+
+    suspend fun getRecentPlans(weeks: Int): List<MealPlan> {
+        val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+        val from = today.minus(weeks, DateTimeUnit.WEEK)
+        val planEntities = dao.getMealPlansInRange(from, today)
+        return planEntities.map { entity ->
+            val days = dao.getDayPlansForMealPlan(entity.id).map { dayEntity ->
+                val slots = dao.getMealSlotsForDayPlan(dayEntity.id)
+                dayEntity.toDomain(slots)
+            }
+            entity.toDomain().copy(days = days)
+        }
+    }
 }

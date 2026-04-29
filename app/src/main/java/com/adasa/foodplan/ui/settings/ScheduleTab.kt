@@ -1,7 +1,7 @@
 package com.adasa.foodplan.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -23,21 +23,114 @@ import kotlinx.datetime.DayOfWeek
 
 private val batchColors = listOf(
     Color(0xFF6750A4), // batch 1 — purple
-    Color(0xFFE8A000), // batch 2 — amber
-    Color(0xFF1D9E75), // batch 3 — green
-    Color(0xFFD4537E)  // batch 4 — pink
+    Color(0xFFE8A000)  // batch 2 — amber
 )
+
+// ── Batch logic helpers ────────────────────────────────────────────────────
+
+private fun getBatchNum(
+    meal: MealCategory,
+    day: DayOfWeek,
+    groups: List<BatchCookingGroup>
+): Int = groups.find { it.meal == meal && day in it.days }?.batchNumber ?: 0
+
+/**
+ * A day is clickable if it is unset, OR if it is at the left or right end of its batch.
+ * Interior days (both neighbors are in the same batch) cannot be modified.
+ */
+private fun isClickable(
+    meal: MealCategory,
+    day: DayOfWeek,
+    days: List<DayOfWeek>,
+    groups: List<BatchCookingGroup>
+): Boolean {
+    val batchNum = getBatchNum(meal, day, groups)
+    if (batchNum == 0) return true
+    val idx = days.indexOf(day)
+    val prevBatch = days.getOrNull(idx - 1)?.let { getBatchNum(meal, it, groups) } ?: 0
+    val nextBatch = days.getOrNull(idx + 1)?.let { getBatchNum(meal, it, groups) } ?: 0
+    // Interior = both neighbors are the same batch → not clickable
+    return !(prevBatch == batchNum && nextBatch == batchNum)
+}
+
+/**
+ * Determines the next batch state for a click:
+ * - Unset + adjacent batch exists → join that adjacent batch
+ * - Unset + no adjacent → start batch 1
+ * - In adjacent batch → switch to the OTHER batch number
+ * - In non-adjacent batch → unset
+ */
+private fun nextBatchNum(
+    meal: MealCategory,
+    day: DayOfWeek,
+    days: List<DayOfWeek>,
+    groups: List<BatchCookingGroup>
+): Int {
+    val idx = days.indexOf(day)
+    val current = getBatchNum(meal, day, groups)
+    val prevBatch = days.getOrNull(idx - 1)?.let { getBatchNum(meal, it, groups) } ?: 0
+    val nextBatch = days.getOrNull(idx + 1)?.let { getBatchNum(meal, it, groups) } ?: 0
+    // Prefer left neighbor's batch, fall back to right
+    val adjacentBatch = prevBatch.takeIf { it > 0 } ?: nextBatch.takeIf { it > 0 } ?: 0
+
+    return when {
+        current == 0 && adjacentBatch > 0 -> adjacentBatch          // join adjacent
+        current == 0 -> 1                                            // start new batch 1
+        current == adjacentBatch -> if (adjacentBatch == 1) 2 else 1 // switch to other batch
+        else -> 0                                                    // unset
+    }
+}
+
+/**
+ * Applies a click to the batch groups list and returns the updated list.
+ */
+private fun applyBatchClick(
+    meal: MealCategory,
+    day: DayOfWeek,
+    days: List<DayOfWeek>,
+    groups: List<BatchCookingGroup>
+): List<BatchCookingGroup> {
+    if (!isClickable(meal, day, days, groups)) return groups
+
+    val next = nextBatchNum(meal, day, days, groups)
+    val updated = groups.toMutableList()
+
+    // Remove day from its current group
+    val currentGroup = updated.find { it.meal == meal && day in it.days }
+    if (currentGroup != null) {
+        val remaining = currentGroup.days - day
+        updated.remove(currentGroup)
+        if (remaining.isNotEmpty()) {
+            updated.add(currentGroup.copy(days = remaining))
+        }
+    }
+
+    // Add day to new batch if not unset
+    if (next > 0) {
+        val existing = updated.find { it.meal == meal && it.batchNumber == next }
+        if (existing != null) {
+            updated[updated.indexOf(existing)] = existing.copy(days = existing.days + day)
+        } else {
+            updated.add(BatchCookingGroup(meal, setOf(day), next))
+        }
+    }
+
+    return updated
+}
+
+// ── Composable ─────────────────────────────────────────────────────────────
 
 @Composable
 fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
     val days = DayOfWeek.entries
     val scrollState = rememberScrollState()
     val mealSlots = config?.schedule?.mealSlots ?: emptyMap()
-    val batchGroups = remember(config) {
-        mutableStateListOf<BatchCookingGroup>().also {
-            it.addAll(config?.schedule?.batchGroups ?: emptyList())
-        }
+
+    // Local state synced from config — updates immediately on tap for snappy UX
+    var batchGroups by remember(config?.schedule?.batchGroups) {
+        mutableStateOf(config?.schedule?.batchGroups ?: emptyList())
     }
+
     val snackOptional = config?.schedule?.snackOptionalFill ?: true
     val shoppingDays = config?.shopping?.shoppingDays ?: emptySet()
     var shoppingInterval by remember(config) {
@@ -45,22 +138,23 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(scrollState)
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+
         // ── Meal slots ────────────────────────────────────────────────────
         SettingsSection("Meals", "Uncheck a column to disable that day")
         SettingsCard {
             Column(modifier = Modifier.padding(12.dp)) {
-                // Header row
                 MealMatrixHeader(days)
                 Spacer(Modifier.height(4.dp))
-                // Binary meal rows
                 listOf(
                     "Breakfast" to { c: DayMealConfig -> c.breakfast },
-                    "Lunch" to { c: DayMealConfig -> c.lunch },
-                    "Dinner" to { c: DayMealConfig -> c.dinner }
+                    "Lunch"     to { c: DayMealConfig -> c.lunch },
+                    "Dinner"    to { c: DayMealConfig -> c.dinner }
                 ).forEach { (label, getter) ->
                     MealMatrixRow(
                         label = label,
@@ -70,8 +164,8 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
                             val current = mealSlots[day] ?: DayMealConfig()
                             val updated = when (label) {
                                 "Breakfast" -> current.copy(breakfast = !current.breakfast)
-                                "Lunch" -> current.copy(lunch = !current.lunch)
-                                else -> current.copy(dinner = !current.dinner)
+                                "Lunch"     -> current.copy(lunch = !current.lunch)
+                                else        -> current.copy(dinner = !current.dinner)
                             }
                             viewModel.setMealSlot(day, updated)
                         }
@@ -79,121 +173,148 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
                     Spacer(Modifier.height(3.dp))
                 }
 
-                // ── Snack section ─────────────────────────────────────────
+                // ── Snack ─────────────────────────────────────────────────
                 HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
+
+                // Counter row first
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    Text("Snack", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Optional fill", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Switch(
-                            checked = snackOptional,
-                            onCheckedChange = { viewModel.setSnackOptionalFill(it) },
-                            modifier = Modifier.height(24.dp)
-                        )
-                    }
-                }
-                Text(
-                    "Tap to increment · Hold to reset",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Spacer(Modifier.width(68.dp))
+                    Text(
+                        "Snack",
+                        modifier = Modifier
+                            .width(68.dp)
+                            .align(Alignment.CenterVertically),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     days.forEach { day ->
+                        // -1 = unset (optimizer decides), 0 = no snack, 1-3 = explicit count
                         val count = (mealSlots[day] ?: DayMealConfig()).snackCount
+                        val isUnset = count == -1
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(
-                                    if (count > 0) MaterialTheme.colorScheme.secondaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant
+                                    when {
+                                        isUnset  -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                        count > 0 -> MaterialTheme.colorScheme.secondaryContainer
+                                        else     -> MaterialTheme.colorScheme.surfaceVariant
+                                    }
                                 )
                                 .combinedClickable(
                                     onClick = {
                                         val current = mealSlots[day] ?: DayMealConfig()
-                                        viewModel.setMealSlot(day, current.copy(snackCount = (count + 1) % 4))
+                                        // cycle: -1 → 0 → 1 → 2 → 3 → -1
+                                        val next = if (count >= 3) -1 else count + 1
+                                        viewModel.setMealSlot(day, current.copy(snackCount = next))
                                     },
                                     onLongClick = {
                                         val current = mealSlots[day] ?: DayMealConfig()
-                                        viewModel.setMealSlot(day, current.copy(snackCount = 0))
+                                        viewModel.setMealSlot(day, current.copy(snackCount = -1))
                                     }
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = count.toString(),
+                                text = if (isUnset) "−" else count.toString(),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (count > 0) MaterialTheme.colorScheme.onSecondaryContainer
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = when {
+                                    isUnset  -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    count > 0 -> MaterialTheme.colorScheme.onSecondaryContainer
+                                    else     -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
                             )
                         }
                     }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                // Optional fill toggle second, with hint
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Optional fill",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "Optimizer may add snacks on unset (−) days to help meet goals",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    Switch(
+                        checked = snackOptional,
+                        onCheckedChange = { viewModel.setSnackOptionalFill(it) }
+                    )
                 }
             }
         }
 
         // ── Batch cooking ─────────────────────────────────────────────────
-        SettingsSection("Batch Cooking", "Tap days to group into batches · Different colors = different batches")
+        SettingsSection("Batch Cooking")
         SettingsCard {
             Column(modifier = Modifier.padding(12.dp)) {
-                // Legend
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    batchColors.forEachIndexed { i, color ->
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(color))
-                            Text("Batch ${i + 1}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
                 MealMatrixHeader(days)
                 Spacer(Modifier.height(4.dp))
-                listOf(MealCategory.LUNCH, MealCategory.DINNER, MealCategory.BREAKFAST).forEach { meal ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(
-                            meal.displayName,
-                            modifier = Modifier.width(68.dp).align(Alignment.CenterVertically),
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        days.forEach { day ->
-                            val batchNum = batchGroups
-                                .find { it.meal == meal && day in it.days }?.batchNumber ?: 0
-                            BatchCell(
-                                batchNum = batchNum,
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    val next = (batchNum + 1) % (batchColors.size + 1)
-                                    // Remove day from any existing batch for this meal
-                                    val updated = batchGroups.toMutableList()
-                                    updated.removeAll { it.meal == meal && day in it.days }
-                                    if (next > 0) {
-                                        val existing = updated.find { it.meal == meal && it.batchNumber == next }
-                                        if (existing != null) {
-                                            updated[updated.indexOf(existing)] = existing.copy(days = existing.days + day)
-                                        } else {
-                                            updated.add(BatchCookingGroup(meal, setOf(day), next))
-                                        }
-                                    }
-                                    batchGroups.clear()
-                                    batchGroups.addAll(updated)
-                                    viewModel.saveBatchGroups(updated)
-                                }
+                listOf(MealCategory.LUNCH, MealCategory.DINNER, MealCategory.BREAKFAST)
+                    .forEach { meal ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(
+                                meal.displayName,
+                                modifier = Modifier
+                                    .width(68.dp)
+                                    .align(Alignment.CenterVertically),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(Modifier.width(3.dp))
+                            days.forEach { day ->
+                                val batchNum = getBatchNum(meal, day, batchGroups)
+                                val clickable = isClickable(meal, day, days, batchGroups)
+
+                                val bgColor = when {
+                                    batchNum > 0 -> batchColors[batchNum - 1]
+                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            if (clickable) bgColor
+                                            else bgColor.copy(alpha = 0.5f)
+                                        )
+                                        .then(
+                                            if (clickable) Modifier.clickable {
+                                                val updated = applyBatchClick(
+                                                    meal, day, days, batchGroups
+                                                )
+                                                batchGroups = updated
+                                                viewModel.saveBatchGroups(updated)
+                                            } else Modifier
+                                        )
+                                )
+                                Spacer(Modifier.width(3.dp))
+                            }
                         }
+                        Spacer(Modifier.height(3.dp))
                     }
-                    Spacer(Modifier.height(3.dp))
-                }
             }
         }
 
@@ -203,7 +324,10 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
             Column {
                 SettingsRow(icon = "🛒", title = "Shopping day")
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     days.forEach { day ->
@@ -213,21 +337,19 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
                                 .weight(1f)
                                 .aspectRatio(1f)
                                 .clip(CircleShape)
-                                .background(if (isSelected) Color(0xFF1D9E75) else MaterialTheme.colorScheme.surfaceVariant)
-                                .then(Modifier.wrapContentSize())
-                                .clip(CircleShape),
+                                .background(
+                                    if (isSelected) Color(0xFF1D9E75)
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                .clickable { viewModel.setShoppingDay(day) },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = day.name.first().toString(),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .background(if (isSelected) Color(0xFF1D9E75) else MaterialTheme.colorScheme.surfaceVariant)
-                                    .wrapContentSize(),
+                                color = if (isSelected) Color.White
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -235,19 +357,39 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
                 }
                 HorizontalDivider()
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Interval", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Text("How often to shop", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "Interval",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "How often to shop",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     StepperControl(
                         value = shoppingInterval,
-                        label = "${shoppingInterval} wk",
-                        onDecrement = { if (shoppingInterval > 1) { shoppingInterval--; viewModel.setShoppingInterval(shoppingInterval) } },
-                        onIncrement = { if (shoppingInterval < 4) { shoppingInterval++; viewModel.setShoppingInterval(shoppingInterval) } }
+                        label = "$shoppingInterval wk",
+                        onDecrement = {
+                            if (shoppingInterval > 1) {
+                                shoppingInterval--
+                                viewModel.setShoppingInterval(shoppingInterval)
+                            }
+                        },
+                        onIncrement = {
+                            if (shoppingInterval < 4) {
+                                shoppingInterval++
+                                viewModel.setShoppingInterval(shoppingInterval)
+                            }
+                        }
                     )
                 }
             }
@@ -257,9 +399,14 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
     }
 }
 
+// ── Shared matrix components ───────────────────────────────────────────────
+
 @Composable
 private fun MealMatrixHeader(days: List<DayOfWeek>) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
         Spacer(Modifier.width(68.dp))
         days.forEach { day ->
             Text(
@@ -267,8 +414,7 @@ private fun MealMatrixHeader(days: List<DayOfWeek>) {
                 modifier = Modifier.weight(1f),
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (day == DayOfWeek.FRIDAY || day == DayOfWeek.SATURDAY)
-                    Color(0xFFE8A000) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
         }
@@ -282,10 +428,15 @@ private fun MealMatrixRow(
     isActive: (DayOfWeek) -> Boolean,
     onToggle: (DayOfWeek) -> Unit
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
         Text(
             label,
-            modifier = Modifier.width(68.dp).align(Alignment.CenterVertically),
+            modifier = Modifier
+                .width(68.dp)
+                .align(Alignment.CenterVertically),
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -296,27 +447,17 @@ private fun MealMatrixRow(
                     .weight(1f)
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                    .combinedClickable(onClick = { onToggle(day) }),
+                    .background(
+                        if (active) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    .clickable { onToggle(day) },
                 contentAlignment = Alignment.Center
             ) {
-                if (active) Text("✓", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                if (active) {
+                    Text("✓", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun BatchCell(batchNum: Int, modifier: Modifier, onClick: () -> Unit) {
-    val bgColor = if (batchNum > 0) batchColors[batchNum - 1] else Color(0xFFECE6F0)
-    Box(
-        modifier = modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(6.dp))
-            .background(bgColor)
-            .combinedClickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        if (batchNum > 0) Text(batchNum.toString(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
     }
 }

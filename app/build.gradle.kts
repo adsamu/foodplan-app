@@ -63,6 +63,7 @@ dependencies {
 
     // Navigation
     implementation(libs.androidx.navigation.compose)
+    implementation("androidx.compose.foundation:foundation")
 
     // Hilt
     implementation(libs.hilt.android)

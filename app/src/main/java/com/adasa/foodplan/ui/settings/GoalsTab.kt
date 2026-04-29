@@ -1,10 +1,12 @@
 package com.adasa.foodplan.ui.settings
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -13,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -69,46 +72,19 @@ fun GoalsTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
 
         // ── Daily limits ──────────────────────────────────────────────────
         SettingsSection("Daily limits", "Hard per-day constraints · Leave blank for none")
+        // REPLACE WITH:
         SettingsCard {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MinMaxCard(
-                        label    = "kcal",
-                        minValue = goals?.minKcalPerDay?.toInt()?.toString() ?: "",
-                        maxValue = goals?.maxKcalPerDay?.toInt()?.toString() ?: "",
-                        onMinChange = { viewModel.setMinKcal(it.toDoubleOrNull()) },
-                        onMaxChange = { viewModel.setMaxKcal(it.toDoubleOrNull()) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    MinMaxCard(
-                        label    = "Protein",
-                        minValue = goals?.minProteinPerDay?.toInt()?.toString() ?: "",
-                        maxValue = goals?.maxProteinPerDay?.toInt()?.toString() ?: "",
-                        onMinChange = { viewModel.setMinProtein(it.toDoubleOrNull()) },
-                        onMaxChange = { viewModel.setMaxProtein(it.toDoubleOrNull()) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MinMaxCard(
-                        label    = "Fat",
-                        minValue = goals?.minFatPerDay?.toInt()?.toString() ?: "",
-                        maxValue = goals?.maxFatPerDay?.toInt()?.toString() ?: "",
-                        onMinChange = { viewModel.setMinFat(it.toDoubleOrNull()) },
-                        onMaxChange = { viewModel.setMaxFat(it.toDoubleOrNull()) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    MinMaxCard(
-                        label    = "Carbs",
-                        minValue = goals?.minCarbsPerDay?.toInt()?.toString() ?: "",
-                        maxValue = goals?.maxCarbsPerDay?.toInt()?.toString() ?: "",
-                        onMinChange = { viewModel.setMinCarbs(it.toDoubleOrNull()) },
-                        onMaxChange = { viewModel.setMaxCarbs(it.toDoubleOrNull()) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+            MacroLimitsTable(
+                goals        = goals,
+                onMinKcal    = { viewModel.setMinKcal(it) },
+                onMaxKcal    = { viewModel.setMaxKcal(it) },
+                onMinProtein = { viewModel.setMinProtein(it) },
+                onMaxProtein = { viewModel.setMaxProtein(it) },
+                onMinFat     = { viewModel.setMinFat(it) },
+                onMaxFat     = { viewModel.setMaxFat(it) },
+                onMinCarbs   = { viewModel.setMinCarbs(it) },
+                onMaxCarbs   = { viewModel.setMaxCarbs(it) },
+            )
         }
 
         // ── Protein supplement ────────────────────────────────────────────
@@ -217,6 +193,144 @@ private fun KcalInput(value: Double, onValueChange: (Double) -> Unit) {
             modifier = Modifier.padding(top = 4.dp)
         )
     }
+}
+// ── Macro table ─────────────────────────────────────────────────
+@Composable
+private fun MacroLimitsTable(
+    goals:        NutritionGoals?,
+    onMinKcal:    (Double?) -> Unit,
+    onMaxKcal:    (Double?) -> Unit,
+    onMinProtein: (Double?) -> Unit,
+    onMaxProtein: (Double?) -> Unit,
+    onMinFat:     (Double?) -> Unit,
+    onMaxFat:     (Double?) -> Unit,
+    onMinCarbs:   (Double?) -> Unit,
+    onMaxCarbs:   (Double?) -> Unit,
+) {
+    data class Row(
+        val label: String,
+        val unit:  String,
+        val color: Color,
+        val alpha: Float,
+        val min:   Double?,
+        val max:   Double?,
+        val onMin: (Double?) -> Unit,
+        val onMax: (Double?) -> Unit,
+    )
+
+    val rows = listOf(
+        Row("kcal",    "",  ProteinColor, 1.0f, goals?.minKcalPerDay,    goals?.maxKcalPerDay,    onMinKcal,    onMaxKcal),
+        Row("Protein", "g", ProteinColor, 0.5f, goals?.minProteinPerDay, goals?.maxProteinPerDay, onMinProtein, onMaxProtein),
+        Row("Fat",     "g", FatColor,     1.0f, goals?.minFatPerDay,     goals?.maxFatPerDay,     onMinFat,     onMaxFat),
+        Row("Carbs",   "g", CarbsColor,   1.0f, goals?.minCarbsPerDay,   goals?.maxCarbsPerDay,   onMinCarbs,   onMaxCarbs),
+    )
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Spacer(Modifier.weight(1f))
+            Text(
+                "Min",
+                style    = MaterialTheme.typography.labelSmall,
+                color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(64.dp),
+                textAlign = TextAlign.End
+            )
+            Spacer(Modifier.width(24.dp))
+            Text(
+                "Max",
+                style    = MaterialTheme.typography.labelSmall,
+                color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(64.dp),
+                textAlign = TextAlign.End
+            )
+        }
+
+        rows.forEachIndexed { index, row ->
+            if (index > 0) HorizontalDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(row.color.copy(alpha = row.alpha))
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    row.label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (row.unit.isNotEmpty()) {
+                    Text(
+                        " ${row.unit}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                LimitInput(value = row.min, onChange = row.onMin)
+                Text(
+                    " – ",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                LimitInput(value = row.max, onChange = row.onMax)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LimitInput(value: Double?, onChange: (Double?) -> Unit) {
+    var text by remember(value?.toInt()) {
+        mutableStateOf(value?.toInt()?.toString() ?: "")
+    }
+    BasicTextField(
+        value           = text,
+        onValueChange   = { v ->
+            if (v.length <= 5 && v.all { it.isDigit() }) {
+                text = v
+                onChange(v.toDoubleOrNull())
+            }
+        },
+        textStyle       = LocalTextStyle.current.copy(
+            fontSize   = 13.sp,
+            color      = MaterialTheme.colorScheme.onSurface,
+            textAlign  = TextAlign.End,
+        ),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        singleLine      = true,
+        decorationBox   = { inner ->
+            Box(
+                modifier = Modifier
+                    .width(64.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                if (text.isEmpty()) {
+                    Text(
+                        "—",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+                inner()
+            }
+        }
+    )
 }
 
 // ── Circular macro slider ─────────────────────────────────────────────────

@@ -2,6 +2,8 @@ package com.adasa.foodplan.ui.profile
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,13 +22,21 @@ private val CardBackground = Color(0xFFF3EDF7)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
+    onBackClick: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val currentTheme by viewModel.theme.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Profile", fontWeight = FontWeight.Bold) })
+            TopAppBar(
+                title = { Text("App settings", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
         }
     ) { innerPadding ->
         Column(

@@ -106,8 +106,14 @@ fun AppNavGraph(
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToAppSettings = {
-                        // future: open app settings bottom sheet
+                        navController.navigate(Screen.Profile.route)
                     }
+                )
+            }
+
+            composable(Screen.Profile.route) {
+                ProfileScreen(
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 

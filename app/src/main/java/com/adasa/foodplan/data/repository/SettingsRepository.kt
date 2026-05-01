@@ -38,7 +38,7 @@ class SettingsRepository @Inject constructor(
         val MIN_CARBS = doublePreferencesKey("min_carbs_per_day")
         val MAX_CARBS = doublePreferencesKey("max_carbs_per_day")
         // Diet
-        val DIET_TYPES = stringPreferencesKey("diet_types")          // comma-separated names
+        val DIET_TYPES = stringPreferencesKey("diet_types")
         val ALLERGIES = stringPreferencesKey("allergies")
         val EXCLUDED_INGREDIENT_IDS = stringPreferencesKey("excluded_ingredient_ids")
         val PREFERRED_INGREDIENT_IDS = stringPreferencesKey("preferred_ingredient_ids")
@@ -54,6 +54,9 @@ class SettingsRepository @Inject constructor(
         val SHOPPING_INTERVAL = intPreferencesKey("shopping_interval_weeks")
         // Protein powder
         val POWDER_INGREDIENT_ID = stringPreferencesKey("powder_ingredient_id")
+        val POWDER_NAME = stringPreferencesKey("powder_name")
+        val POWDER_PROTEIN_PER_100G = doublePreferencesKey("powder_protein_per_100g")
+        val POWDER_KCAL_PER_100G = doublePreferencesKey("powder_kcal_per_100g")
         val POWDER_GRAMS_IN_STOCK = doublePreferencesKey("powder_grams_in_stock")
         val POWDER_AUTO_FILL = booleanPreferencesKey("powder_auto_fill")
         val POWDER_LOW_STOCK_WARNING = booleanPreferencesKey("powder_low_stock_warning")
@@ -108,7 +111,6 @@ class SettingsRepository @Inject constructor(
         val slotMap = slots.associate { entity ->
             DayOfWeek(entity.dayOfWeek) to entity.toDomain()
         }.let { map ->
-            // Fill in any missing days with defaults
             DayOfWeek.entries.associateWith { map[it] ?: defaultDayConfig(it) }
         }
         return MealScheduleConfig(
@@ -156,14 +158,15 @@ class SettingsRepository @Inject constructor(
         )
 
     private fun buildProteinPowder(prefs: androidx.datastore.preferences.core.Preferences): ProteinPowder? {
-        val id = prefs[POWDER_INGREDIENT_ID] ?: return null
+        val id   = prefs[POWDER_INGREDIENT_ID] ?: return null
+        val name = prefs[POWDER_NAME] ?: return null
         return ProteinPowder(
-            ingredientId = id,
-            name = "Protein powder",    // fetched separately when needed
-            proteinPer100g = 90.0,      // fetched from ingredient
-            kcalPer100g = 357.0,
-            gramsInStock = prefs[POWDER_GRAMS_IN_STOCK] ?: 0.0,
-            autoFillGap = prefs[POWDER_AUTO_FILL] ?: true,
+            ingredientId   = id,
+            name           = name,
+            proteinPer100g = prefs[POWDER_PROTEIN_PER_100G] ?: 0.0,
+            kcalPer100g    = prefs[POWDER_KCAL_PER_100G]    ?: 0.0,
+            gramsInStock   = prefs[POWDER_GRAMS_IN_STOCK]   ?: 0.0,
+            autoFillGap    = prefs[POWDER_AUTO_FILL]         ?: true,
             lowStockWarning = prefs[POWDER_LOW_STOCK_WARNING] ?: true
         )
     }
@@ -238,10 +241,20 @@ class SettingsRepository @Inject constructor(
         it[SHOPPING_INTERVAL] = weeks
     }
 
-    suspend fun setProteinPowder(ingredientId: String, gramsInStock: Double) = dataStore.edit {
-        it[POWDER_INGREDIENT_ID] = ingredientId
-        it[POWDER_GRAMS_IN_STOCK] = gramsInStock
+    suspend fun setProteinPowder(
+        ingredientId:   String,
+        name:           String,
+        proteinPer100g: Double,
+        kcalPer100g:    Double,
+        gramsInStock:   Double
+    ) = dataStore.edit {
+        it[POWDER_INGREDIENT_ID]   = ingredientId
+        it[POWDER_NAME]            = name
+        it[POWDER_PROTEIN_PER_100G] = proteinPer100g
+        it[POWDER_KCAL_PER_100G]   = kcalPer100g
+        it[POWDER_GRAMS_IN_STOCK]  = gramsInStock
     }
+
     suspend fun restockPowder(grams: Double) = dataStore.edit {
         it[POWDER_GRAMS_IN_STOCK] = grams
     }
@@ -254,10 +267,10 @@ class SettingsRepository @Inject constructor(
     suspend fun setMealSlotConfig(dayOfWeek: DayOfWeek, config: com.adasa.foodplan.domain.model.DayMealConfig) =
         dao.upsertMealSlotConfig(
             MealSlotConfigEntity(
-                dayOfWeek = dayOfWeek.isoDayNumber,
-                breakfast = config.breakfast,
-                lunch = config.lunch,
-                dinner = config.dinner,
+                dayOfWeek  = dayOfWeek.isoDayNumber,
+                breakfast  = config.breakfast,
+                lunch      = config.lunch,
+                dinner     = config.dinner,
                 snackCount = config.snackCount
             )
         )

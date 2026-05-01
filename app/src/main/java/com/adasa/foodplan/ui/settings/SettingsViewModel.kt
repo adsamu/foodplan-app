@@ -62,6 +62,18 @@ class SettingsViewModel @Inject constructor(
     fun setMinCarbs(v: Double?) { viewModelScope.launch { repo.setMinCarbs(v) } }
     fun setMaxCarbs(v: Double?) { viewModelScope.launch { repo.setMaxCarbs(v) } }
 
+    fun setPowder(ingredient: Ingredient, gramsInStock: Double) {
+        viewModelScope.launch {
+            repo.setProteinPowder(
+                ingredientId   = ingredient.id,
+                name           = ingredient.name,
+                proteinPer100g = ingredient.proteinPer100g,
+                kcalPer100g    = ingredient.kcalPer100g,
+                gramsInStock   = gramsInStock
+            )
+        }
+    }
+
     fun setPowderAutoFill(enabled: Boolean) { viewModelScope.launch { repo.setPowderAutoFill(enabled) } }
     fun setPowderLowStockWarning(enabled: Boolean) { viewModelScope.launch { repo.setPowderLowStockWarning(enabled) } }
     fun restockPowder(grams: Double) { viewModelScope.launch { repo.restockPowder(grams) } }
@@ -79,6 +91,27 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val current = config.value?.diet?.allergies ?: emptySet()
             repo.setAllergies(if (allergy in current) current - allergy else current + allergy)
+        }
+    }
+
+    fun toggleExcludedIngredient(id: String) {
+        viewModelScope.launch {
+            val current = config.value?.diet?.excludedIngredientIds ?: emptySet()
+            repo.setExcludedIngredients(if (id in current) current - id else current + id)
+        }
+    }
+
+    fun togglePreferredIngredient(id: String) {
+        viewModelScope.launch {
+            val current = config.value?.diet?.preferredIngredientIds ?: emptySet()
+            repo.setPreferredIngredients(if (id in current) current - id else current + id)
+        }
+    }
+
+    fun toggleDislikedIngredient(id: String) {
+        viewModelScope.launch {
+            val current = config.value?.diet?.dislikedIngredientIds ?: emptySet()
+            repo.setDislikedIngredients(if (id in current) current - id else current + id)
         }
     }
 

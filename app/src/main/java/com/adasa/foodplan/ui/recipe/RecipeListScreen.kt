@@ -32,24 +32,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.adasa.foodplan.domain.model.Ingredient
+import com.adasa.foodplan.domain.model.MealCategory
 import com.adasa.foodplan.domain.model.Recipe
 import com.adasa.foodplan.domain.model.RecipeType
-
-// Colors are now pulled from MaterialTheme.colorScheme at the call site — see usages below.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeListScreen(
-    onRecipeClick: (String) -> Unit,
-    onAddRecipeClick: () -> Unit,
+    onRecipeClick:       (String) -> Unit,
+    onIngredientClick:   (String) -> Unit,
+    onAddRecipeClick:    () -> Unit,
     onAddIngredientClick: () -> Unit,
-    viewModel: RecipeListViewModel = hiltViewModel()
+    viewModel:           RecipeListViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val activeFilter by viewModel.activeFilter.collectAsStateWithLifecycle()
-
-    var fabExpanded by remember { mutableStateOf(false) }
+    val uiState         by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchQuery     by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val activeTab       by viewModel.activeTab.collectAsStateWithLifecycle()
+    val activeMealCat   by viewModel.activeMealCat.collectAsStateWithLifecycle()
+    val activeIngCat    by viewModel.activeIngredientCat.collectAsStateWithLifecycle()
+    var fabExpanded     by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -57,186 +59,184 @@ fun RecipeListScreen(
         },
         floatingActionButton = {
             ExpandableFab(
-                expanded = fabExpanded,
-                onToggle = { fabExpanded = !fabExpanded },
-                onAddRecipe = { fabExpanded = false; onAddRecipeClick() },
+                expanded        = fabExpanded,
+                onToggle        = { fabExpanded = !fabExpanded },
+                onAddRecipe     = { fabExpanded = false; onAddRecipeClick() },
                 onAddIngredient = { fabExpanded = false; onAddIngredientClick() }
             )
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
+
             // Search bar
             OutlinedTextField(
-                value = searchQuery,
+                value         = searchQuery,
                 onValueChange = viewModel::onSearchQueryChange,
-                placeholder = { Text("Search recipes") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(50),
-                colors = OutlinedTextFieldDefaults.colors(
+                placeholder   = { Text("Search recipes or ingredients") },
+                leadingIcon   = { Icon(Icons.Default.Search, contentDescription = null) },
+                modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                shape         = RoundedCornerShape(50),
+                colors        = OutlinedTextFieldDefaults.colors(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = Color.Transparent
+                    focusedContainerColor   = MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedBorderColor    = Color.Transparent,
+                    focusedBorderColor      = Color.Transparent
                 ),
                 singleLine = true
             )
-            // Filter chips
-            val filters = listOf(
-                RecipeFilter.ALL to "All",
-                RecipeFilter.MEALS to "Meals",
-                RecipeFilter.COMPONENTS to "Components",
-                RecipeFilter.BREAKFAST to "Breakfast",
-                RecipeFilter.LUNCH to "Lunch",
-                RecipeFilter.DINNER to "Dinner",
-                RecipeFilter.SNACK to "Snack"
-            )
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(filters) { (filter, label) ->
-                    val active = activeFilter == filter
-                    FilterChip(
-                        selected = active,
-                        onClick = { viewModel.onFilterChange(filter) },
-                        label = {
-                            Text(
-                                label,
-                                color = if (active) MaterialTheme.colorScheme.onSecondaryContainer else Color.Unspecified,
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
-                        )
+
+            // Tab row
+            TabRow(selectedTabIndex = activeTab.ordinal) {
+                RecipeListTab.entries.forEach { tab ->
+                    Tab(
+                        selected = activeTab == tab,
+                        onClick  = { viewModel.onTabChange(tab) },
+                        text     = { Text(tab.name.lowercase().replaceFirstChar { it.uppercase() }) }
                     )
                 }
             }
+
+            // Sub-category chips
+            when (activeTab) {
+                RecipeListTab.MEALS -> {
+                    LazyRow(
+                        contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = activeMealCat == null,
+                                onClick  = { viewModel.onMealCatChange(null) },
+                                label    = { Text("All") },
+                                shape    = RoundedCornerShape(8.dp)
+                            )
+                        }
+                        items(MealCategory.entries) { cat ->
+                            FilterChip(
+                                selected = activeMealCat == cat,
+                                onClick  = { viewModel.onMealCatChange(cat) },
+                                label    = { Text(cat.displayName) },
+                                shape    = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+                }
+                RecipeListTab.INGREDIENTS -> {
+                    val categories = (uiState as? RecipeListUiState.Success)?.ingredientCategories ?: emptyList()
+                    if (categories.isNotEmpty()) {
+                        LazyRow(
+                            contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            item {
+                                FilterChip(
+                                    selected = activeIngCat == null,
+                                    onClick  = { viewModel.onIngredientCatChange(null) },
+                                    label    = { Text("All") },
+                                    shape    = RoundedCornerShape(8.dp)
+                                )
+                            }
+                            items(categories) { cat ->
+                                FilterChip(
+                                    selected = activeIngCat == cat,
+                                    onClick  = { viewModel.onIngredientCatChange(cat) },
+                                    label    = { Text(cat) },
+                                    shape    = RoundedCornerShape(8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                RecipeListTab.COMPONENTS -> { /* no sub-filters */ }
+            }
+
             // Content
             when (val state = uiState) {
-                is RecipeListUiState.Loading -> {
+                is RecipeListUiState.Loading ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
-                }
-                is RecipeListUiState.Empty -> {
+                is RecipeListUiState.Empty ->
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No recipes found", style = MaterialTheme.typography.bodyLarge)
+                        Text("Nothing found", style = MaterialTheme.typography.bodyLarge)
+                    }
+                is RecipeListUiState.Success -> {
+                    when (activeTab) {
+                        RecipeListTab.MEALS ->
+                            RecipeTabContent(state.meals, onRecipeClick)
+                        RecipeListTab.COMPONENTS ->
+                            RecipeTabContent(state.components, onRecipeClick)
+                        RecipeListTab.INGREDIENTS ->
+                            IngredientTabContent(state.ingredients, onIngredientClick)
                     }
                 }
-                is RecipeListUiState.Success -> {
-                    RecipeListContent(
-                        meals = state.meals,
-                        components = state.components,
-                        activeFilter = activeFilter,
-                        onRecipeClick = onRecipeClick
-                    )
-                }
             }
         }
     }
 }
 
+// ── Recipe tab ────────────────────────────────────────────────────────────────
+
 @Composable
-private fun RecipeListContent(
-    meals: List<Recipe>,
-    components: List<Recipe>,
-    activeFilter: RecipeFilter,
-    onRecipeClick: (String) -> Unit
-) {
+private fun RecipeTabContent(recipes: List<Recipe>, onRecipeClick: (String) -> Unit) {
     LazyColumn(
-        contentPadding = PaddingValues(16.dp),
+        contentPadding      = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        val showSections = activeFilter == RecipeFilter.ALL
-        if (showSections && meals.isNotEmpty()) {
-            item { SectionHeader("Meals") }
-        }
-        if (meals.isNotEmpty()) {
-            items(meals) { recipe ->
-                RecipeCard(recipe = recipe, onClick = { onRecipeClick(recipe.id) })
-            }
-        }
-        if (showSections && components.isNotEmpty()) {
-            item { SectionHeader("Components") }
-        }
-        if (components.isNotEmpty()) {
-            items(components) { recipe ->
-                RecipeCard(recipe = recipe, onClick = { onRecipeClick(recipe.id) })
-            }
+        items(recipes, key = { it.id }) { recipe ->
+            RecipeCard(recipe = recipe, onClick = { onRecipeClick(recipe.id) })
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title.uppercase(),
-        fontSize = 10.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        letterSpacing = 0.8.sp,
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-    )
 }
 
 @Composable
 private fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
     Card(
-        onClick = onClick,
+        onClick  = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        shape    = RoundedCornerShape(14.dp),
+        colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(
-            modifier = Modifier.padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier              = Modifier.padding(10.dp),
+            verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Icon box
             Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                modifier         = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (recipe.type == RecipeType.COMPONENT)
-                        Icons.Default.Blender else Icons.Default.Restaurant,
+                    imageVector        = if (recipe.type == RecipeType.COMPONENT) Icons.Default.Blender else Icons.Default.Restaurant,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(22.dp)
+                    tint               = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier           = Modifier.size(22.dp)
                 )
             }
-            // Name + badges
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     recipe.name,
-                    style = MaterialTheme.typography.titleSmall,
+                    style      = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines   = 1,
+                    overflow   = TextOverflow.Ellipsis
                 )
                 if (recipe.mealCategories.isNotEmpty() || recipe.type == RecipeType.COMPONENT) {
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (recipe.type == RecipeType.COMPONENT) {
                             RecipeBadge(
-                                label = recipe.componentCategory?.displayName ?: "Component",
+                                label     = recipe.componentCategory?.displayName ?: "Component",
                                 background = MaterialTheme.colorScheme.tertiaryContainer,
-                                textColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                textColor  = MaterialTheme.colorScheme.onTertiaryContainer
                             )
                         }
                         recipe.mealCategories.forEach { cat ->
                             RecipeBadge(
-                                label = cat.displayName,
+                                label     = cat.displayName,
                                 background = MaterialTheme.colorScheme.primaryContainer,
-                                textColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                textColor  = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                     }
@@ -248,89 +248,133 @@ private fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
 
 @Composable
 private fun RecipeBadge(label: String, background: Color, textColor: Color) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = background
+    Surface(shape = RoundedCornerShape(50), color = background) {
+        Text(label, color = textColor, style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+    }
+}
+
+// ── Ingredient tab ────────────────────────────────────────────────────────────
+
+@Composable
+private fun IngredientTabContent(ingredients: List<Ingredient>, onIngredientClick: (String) -> Unit) {
+    LazyColumn(
+        contentPadding      = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = label,
-            color = textColor,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-        )
+        items(ingredients, key = { it.id }) { ingredient ->
+            IngredientCard(ingredient = ingredient, onClick = { onIngredientClick(ingredient.id) })
+        }
     }
 }
 
 @Composable
+private fun IngredientCard(ingredient: Ingredient, onClick: () -> Unit) {
+    Card(
+        onClick  = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(14.dp),
+        colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Row(
+            modifier              = Modifier.padding(10.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier         = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector        = Icons.Default.Kitchen,
+                    contentDescription = null,
+                    tint               = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier           = Modifier.size(22.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    ingredient.name,
+                    style      = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines   = 1,
+                    overflow   = TextOverflow.Ellipsis
+                )
+                if (ingredient.category.isNotBlank()) {
+                    Text(
+                        ingredient.category,
+                        style  = MaterialTheme.typography.bodySmall,
+                        color  = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
+            }
+            // Macro summary
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "${ingredient.kcalPer100g.toInt()} kcal",
+                    style      = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color      = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "P ${ingredient.proteinPer100g.toInt()}g · F ${ingredient.fatPer100g.toInt()}g · C ${ingredient.carbsPer100g.toInt()}g",
+                    style  = MaterialTheme.typography.labelSmall,
+                    color  = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "per 100g",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+        }
+    }
+}
+
+// ── FAB ───────────────────────────────────────────────────────────────────────
+
+@Composable
 private fun ExpandableFab(
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    onAddRecipe: () -> Unit,
+    expanded:        Boolean,
+    onToggle:        () -> Unit,
+    onAddRecipe:     () -> Unit,
     onAddIngredient: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.End) {
         AnimatedVisibility(
             visible = expanded,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            enter   = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit    = slideOutVertically(targetOffsetY = { it }) + fadeOut()
         ) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SmallFabOption(
-                    label = "New Ingredient",
-                    icon = { Icon(Icons.Default.Kitchen, contentDescription = null) },
-                    onClick = onAddIngredient
-                )
-                SmallFabOption(
-                    label = "New Recipe",
-                    icon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
-                    onClick = onAddRecipe
-                )
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SmallFabOption("New Ingredient", { Icon(Icons.Default.Kitchen, null) }, onAddIngredient)
+                SmallFabOption("New Recipe",     { Icon(Icons.Default.MenuBook, null) }, onAddRecipe)
             }
         }
         Spacer(Modifier.height(12.dp))
         FloatingActionButton(
-            onClick = onToggle,
-            shape = RoundedCornerShape(14.dp),
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            onClick         = onToggle,
+            shape           = RoundedCornerShape(14.dp),
+            containerColor  = MaterialTheme.colorScheme.primaryContainer,
+            contentColor    = MaterialTheme.colorScheme.onPrimaryContainer
         ) {
             Icon(
-                imageVector = if (expanded) Icons.Default.Close else Icons.Default.Add,
+                imageVector        = if (expanded) Icons.Default.Close else Icons.Default.Add,
                 contentDescription = if (expanded) "Close" else "Add",
-                modifier = Modifier.graphicsLayer {
-                    rotationZ = if (expanded) 45f else 0f
-                }
+                modifier           = Modifier.graphicsLayer { rotationZ = if (expanded) 45f else 0f }
             )
         }
     }
 }
 
 @Composable
-private fun SmallFabOption(
-    label: String,
-    icon: @Composable () -> Unit,
-    onClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            tonalElevation = 2.dp
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-            )
+private fun SmallFabOption(label: String, icon: @Composable () -> Unit, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, tonalElevation = 2.dp) {
+            Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
         }
-        SmallFloatingActionButton(onClick = onClick) {
-            icon()
-        }
+        SmallFloatingActionButton(onClick = onClick) { icon() }
     }
 }

@@ -59,6 +59,7 @@ fun AddEditRecipeScreen(
     onSaved: () -> Unit,
     onBackClick: () -> Unit,
     onNavigateToAddIngredient: () -> Unit = {},
+    onViewIngredient: (ingredientId: String, index: Int, currentGrams: Double) -> Unit = { _, _, _ -> },
     viewModel: AddEditRecipeViewModel = hiltViewModel()
 ) {
     LaunchedEffect(recipeId) { viewModel.loadRecipe(recipeId) }
@@ -187,7 +188,8 @@ fun AddEditRecipeScreen(
                 IngredientRow(
                     ingredient     = ingredient,
                     onAmountChange = { viewModel.updateIngredientAmount(index, it) },
-                    onRemove       = { viewModel.removeIngredient(index) }
+                    onRemove       = { viewModel.removeIngredient(index) },
+                    onViewDetail   = { id -> onViewIngredient(id, index, ingredient.amount) }
                 )
             }
 
@@ -413,6 +415,7 @@ private fun IngredientRow(
     ingredient:     RecipeIngredientUi,
     onAmountChange: (Double) -> Unit,
     onRemove:       () -> Unit,
+    onViewDetail:   (String) -> Unit = {},
 ) {
     // Fix: key on ingredient identity (id), not on amount — prevents keyboard dismissal on every keystroke
     var amountText by remember(ingredient.ingredientId, ingredient.subRecipeId) {
@@ -449,6 +452,14 @@ private fun IngredientRow(
                 amountText = text
                 text.toDoubleOrNull()?.let { onAmountChange(it) }
             })
+            if (ingredient.ingredientId != null) {
+                IconButton(
+                    onClick  = { onViewDetail(ingredient.ingredientId) },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Text("›", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
                 Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(14.dp))
             }

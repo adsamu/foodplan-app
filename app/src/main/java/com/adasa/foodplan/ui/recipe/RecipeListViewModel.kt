@@ -2,7 +2,9 @@ package com.adasa.foodplan.ui.recipe
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.adasa.foodplan.data.repository.IngredientRepository
 import com.adasa.foodplan.data.repository.RecipeRepository
+import com.adasa.foodplan.domain.model.Ingredient
 import com.adasa.foodplan.domain.model.MealCategory
 import com.adasa.foodplan.domain.model.Recipe
 import com.adasa.foodplan.domain.model.RecipeType
@@ -15,66 +17,59 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class RecipeFilter {
-    ALL, MEALS, COMPONENTS, BREAKFAST, LUNCH, DINNER, SNACK
-}
+enum class RecipeListTab { MEALS, COMPONENTS, INGREDIENTS }
 
 sealed interface RecipeListUiState {
     data object Loading : RecipeListUiState
-    data object Empty : RecipeListUiState
+    data object Empty   : RecipeListUiState
     data class Success(
-        val meals: List<Recipe>,
-        val components: List<Recipe>
+        val meals:               List<Recipe>,
+        val components:          List<Recipe>,
+        val ingredients:         List<Ingredient>,
+        val ingredientCategories: List<String>,
     ) : RecipeListUiState
 }
 
 @HiltViewModel
 class RecipeListViewModel @Inject constructor(
-    private val recipeRepository: RecipeRepository
+    private val recipeRepository:     RecipeRepository,
+    private val ingredientRepository: IngredientRepository,
 ) : ViewModel() {
 
-    val searchQuery = MutableStateFlow("")
-    val activeFilter = MutableStateFlow(RecipeFilter.ALL)
+    val searchQuery         = MutableStateFlow("")
+    val activeTab           = MutableStateFlow(RecipeListTab.MEALS)
+    val activeMealCat       = MutableStateFlow<MealCategory?>(null)
+    val activeIngredientCat = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<RecipeListUiState> = combine(
         recipeRepository.getAllRecipes(),
+        ingredientRepository.getAllIngredients(),
         searchQuery,
-        activeFilter
-    ) { recipes, query, filter ->
-        val filtered = recipes.filter { recipe ->
-            val matchesQuery = query.isBlank() ||
-                recipe.name.contains(query, ignoreCase = true)
-            val matchesFilter = when (filter) {
-                RecipeFilter.ALL -> true
-                RecipeFilter.MEALS -> recipe.type == RecipeType.MEAL
-                RecipeFilter.COMPONENTS -> recipe.type == RecipeType.COMPONENT
-                RecipeFilter.BREAKFAST -> recipe.type == RecipeType.MEAL &&
-                    MealCategory.BREAKFAST in recipe.mealCategories
-                RecipeFilter.LUNCH -> recipe.type == RecipeType.MEAL &&
-                    MealCategory.LUNCH in recipe.mealCategories
-                RecipeFilter.DINNER -> recipe.type == RecipeType.MEAL &&
-                    MealCategory.DINNER in recipe.mealCategories
-                RecipeFilter.SNACK -> recipe.type == RecipeType.MEAL &&
-                    MealCategory.SNACK in recipe.mealCategories
-            }
-            matchesQuery && matchesFilter
-        }
-        val meals = filtered.filter { it.type == RecipeType.MEAL }
-        val components = filtered.filter { it.type == RecipeType.COMPONENT }
-        if (meals.isEmpty() && components.isEmpty()) RecipeListUiState.Empty
-        else RecipeListUiState.Success(meals = meals, components = components)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = RecipeListUiState.Loading
-    )
+        activeMealCat,
+        activeIngredientCat,
+    ) { recipes, ingredients, query, mealCat, ingCat ->
+
+        val filteredRecipes = recipes.filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
+        val meals           = filteredRecipes
+            .filter { it.type == RecipeType.MEAL }
+            .filter { mealCat == null || mealCat in it.mealCategories }
+        val components      = filteredRecipes.filter { it.type == RecipeType.COMPONENT }
+        val filteredIngs    = ingredients
+            .filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
+            .filter { ingCat == null || it.category == ingCat }
+        val categories      = ingredients.map { it.category }.filter { it.isNotBlank() }.distinct().sorted()
+
+        if (meals.isEmpty() && components.isEmpty() && filteredIngs.isEmpty()) RecipeListUiState.Empty
+        else RecipeListUiState.Success(meals, components, filteredIngs, categories)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RecipeListUiState.Loading)
 
     fun onSearchQueryChange(query: String) { searchQuery.value = query }
-    fun onFilterChange(filter: RecipeFilter) { activeFilter.value = filter }
-
-    fun deleteRecipe(recipe: Recipe) {
-        viewModelScope.launch {
-            recipeRepository.deleteRecipe(recipe)
-        }
+    fun onTabChange(tab: RecipeListTab) {
+        activeTab.value = tab
+        activeMealCat.value       = null
+        activeIngredientCat.value = null
     }
+    fun onMealCatChange(cat: MealCategory?)  { activeMealCat.value = cat }
+    fun onIngredientCatChange(cat: String?)  { activeIngredientCat.value = cat }
+    fun deleteRecipe(recipe: Recipe) { viewModelScope.launch { recipeRepository.deleteRecipe(recipe) } }
 }

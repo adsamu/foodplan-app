@@ -25,6 +25,24 @@ sealed class Screen(val route: String) {
             if (ingredientId != null) "add_edit_ingredient?ingredientId=$ingredientId"
             else "add_edit_ingredient"
     }
+
+    data object IngredientDetail : Screen(
+        "ingredient_detail/{ingredientId}?recipeIngredientIndex={recipeIngredientIndex}&currentAmountGrams={currentAmountGrams}"
+    ) {
+        fun createRoute(
+            ingredientId: String,
+            recipeIngredientIndex: Int? = null,
+            currentAmountGrams: Double? = null
+        ): String {
+            var route = "ingredient_detail/$ingredientId"
+            val params = buildList {
+                if (recipeIngredientIndex != null) add("recipeIngredientIndex=$recipeIngredientIndex")
+                if (currentAmountGrams != null) add("currentAmountGrams=$currentAmountGrams")
+            }
+            if (params.isNotEmpty()) route += "?" + params.joinToString("&")
+            return route
+        }
+    }
 }
 
 /** Routes where the bottom navigation bar is visible. */

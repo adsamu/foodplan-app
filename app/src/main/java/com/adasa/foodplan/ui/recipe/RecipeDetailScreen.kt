@@ -45,6 +45,7 @@ fun RecipeDetailScreen(
     recipeId: String,
     onEditClick: () -> Unit,
     onBackClick: () -> Unit,
+    onIngredientClick: (String) -> Unit = {},
     viewModel: RecipeDetailViewModel = hiltViewModel()
 ) {
     LaunchedEffect(recipeId) { viewModel.loadRecipe(recipeId) }
@@ -171,7 +172,10 @@ fun RecipeDetailScreen(
                                         IngredientDetailRow(
                                             name        = name,
                                             amount      = amount,
-                                            isComponent = isComponent
+                                            isComponent = isComponent,
+                                            onClick     = if (ingredient.ingredientId != null)
+                                            {{ onIngredientClick(ingredient.ingredientId) }}
+                                            else null
                                         )
                                         if (index < state.recipe.ingredients.lastIndex) {
                                             HorizontalDivider(
@@ -316,10 +320,11 @@ private fun DetailSectionLabel(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun IngredientDetailRow(name: String, amount: String, isComponent: Boolean) {
+private fun IngredientDetailRow(name: String, amount: String, isComponent: Boolean, onClick: (() -> Unit)? = null) {
     Row(
         modifier              = Modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)

@@ -3,6 +3,7 @@ package com.adasa.foodplan.ui.ingredient
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.adasa.foodplan.data.repository.IngredientRepository
+import com.adasa.foodplan.data.repository.RecipeRepository
 import com.adasa.foodplan.domain.model.Ingredient
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +19,8 @@ sealed interface IngredientDetailUiState {
 
 @HiltViewModel
 class IngredientDetailViewModel @Inject constructor(
-    private val ingredientRepository: IngredientRepository
+    private val ingredientRepository: IngredientRepository,
+    private val recipeRepository:     RecipeRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<IngredientDetailUiState>(IngredientDetailUiState.Loading)
@@ -37,6 +39,9 @@ class IngredientDetailViewModel @Inject constructor(
     fun deleteIngredient() {
         val state = _uiState.value as? IngredientDetailUiState.Success ?: return
         viewModelScope.launch {
+            // Remove all recipe_ingredient rows that reference this ingredient first,
+            // so recipes don't show orphaned "Ingredient" placeholders.
+            recipeRepository.deleteRecipeIngredientsByIngredientId(state.ingredient.id)
             ingredientRepository.deleteIngredient(state.ingredient)
         }
     }

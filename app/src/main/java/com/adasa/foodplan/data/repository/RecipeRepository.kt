@@ -67,6 +67,10 @@ class RecipeRepository @Inject constructor(
     suspend fun deleteRecipe(recipe: Recipe) =
         recipeDao.deleteRecipe(recipe.toEntity())
 
+    /** Remove all recipe_ingredients rows that reference a deleted ingredient. */
+    suspend fun deleteRecipeIngredientsByIngredientId(ingredientId: String) =
+        recipeDao.deleteRecipeIngredientsByIngredientId(ingredientId)
+
     suspend fun getRecipeWithIngredients(id: String): Recipe? {
         val entity = recipeDao.getRecipeById(id) ?: return null
         val ingredientEntities = recipeDao.getIngredientsForRecipe(id)

@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -141,9 +142,12 @@ fun AppNavGraph(
             ) { backStackEntry ->
                 val recipeId = backStackEntry.arguments?.getString("recipeId") ?: return@composable
                 RecipeDetailScreen(
-                    recipeId = recipeId,
-                    onEditClick = { navController.navigate(Screen.AddEditRecipe.createRoute(recipeId)) },
-                    onBackClick = { navController.popBackStack() }
+                    recipeId          = recipeId,
+                    onEditClick       = { navController.navigate(Screen.AddEditRecipe.createRoute(recipeId)) },
+                    onBackClick       = { navController.popBackStack() },
+                    onIngredientClick = { ingredientId ->
+                        navController.navigate(Screen.IngredientDetail.createRoute(ingredientId))
+                    }
                 )
             }
 
@@ -166,23 +170,7 @@ fun AppNavGraph(
                 LaunchedEffect(newIngredientId) {
                     newIngredientId?.let { id ->
                         viewModel.addIngredient(id, 100.0)
-                        backStackEntry.savedStateHandle.remove<String>("new_ingredient_id")
-                    }
-                }
-
-                // Update ingredient amount when returning from IngredientDetailScreen
-                val updatedAmount by backStackEntry.savedStateHandle
-                    .getStateFlow<String?>("updated_ingredient_amount", null)
-                    .collectAsStateWithLifecycle()
-                LaunchedEffect(updatedAmount) {
-                    updatedAmount?.let { raw ->
-                        val parts = raw.split(":")
-                        val index = parts.getOrNull(0)?.toIntOrNull()
-                        val grams = parts.getOrNull(1)?.toDoubleOrNull()
-                        if (index != null && grams != null) {
-                            viewModel.updateIngredientAmount(index, grams)
-                            backStackEntry.savedStateHandle.remove<String>("updated_ingredient_amount")
-                        }
+                        backStackEntry.savedStateHandle["new_ingredient_id"] = null
                     }
                 }
 
@@ -204,24 +192,24 @@ fun AppNavGraph(
 
             composable(
                 route = Screen.AddEditIngredient.route,
-            arguments = listOf(
-                navArgument("ingredientId") {
-                    type = NavType.StringType; nullable = true; defaultValue = null
-                }
-            )
+                arguments = listOf(
+                    navArgument("ingredientId") {
+                        type = NavType.StringType; nullable = true; defaultValue = null
+                    }
+                )
             ) { backStackEntry ->
-            val ingredientId = backStackEntry.arguments?.getString("ingredientId")
-            AddEditIngredientScreen(
-                ingredientId = ingredientId,
-                onSaved = { savedId ->
-                    navController.previousBackStackEntry
-                        ?.savedStateHandle
-                        ?.set("new_ingredient_id", savedId)
-                    navController.popBackStack()
-                },
-                onBackClick = { navController.popBackStack() }
-            )
-        }
+                val ingredientId = backStackEntry.arguments?.getString("ingredientId")
+                AddEditIngredientScreen(
+                    ingredientId = ingredientId,
+                    onSaved = { savedId ->
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("new_ingredient_id", savedId)
+                        navController.popBackStack()
+                    },
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
 
             composable(
                 route = Screen.IngredientDetail.route,
@@ -234,6 +222,16 @@ fun AppNavGraph(
                 val ingredientId          = backStackEntry.arguments?.getString("ingredientId") ?: return@composable
                 val recipeIngredientIndex = backStackEntry.arguments?.getString("recipeIngredientIndex")?.toIntOrNull()
                 val currentAmountGrams    = backStackEntry.arguments?.getString("currentAmountGrams")?.toDoubleOrNull()
+
+                // Get the same AddEditRecipeViewModel instance that AddEditRecipeScreen is using.
+                // Explicit type parameter avoids any inference ambiguity.
+                val addEditViewModel: com.adasa.foodplan.ui.recipe.AddEditRecipeViewModel? =
+                    if (recipeIngredientIndex != null)
+                        androidx.hilt.navigation.compose.hiltViewModel<com.adasa.foodplan.ui.recipe.AddEditRecipeViewModel>(
+                            navController.getBackStackEntry(Screen.AddEditRecipe.route)
+                        )
+                    else null
+
                 IngredientDetailScreen(
                     ingredientId           = ingredientId,
                     recipeIngredientIndex  = recipeIngredientIndex,
@@ -242,10 +240,17 @@ fun AppNavGraph(
                     onEditClick            = { id ->
                         navController.navigate(Screen.AddEditIngredient.createRoute(id))
                     },
-                    onAmountSaved          = { index, grams ->
-                        navController.previousBackStackEntry
-                            ?.savedStateHandle
-                            ?.set("updated_ingredient_amount", "${index}:${grams}")
+                    // Index is captured here in the NavGraph — no need to pass it through the screen
+                    onRemoveFromRecipe     = {
+                        if (recipeIngredientIndex != null) {
+                            addEditViewModel?.removeIngredient(recipeIngredientIndex)
+                        }
+                        navController.popBackStack()
+                    },
+                    onAmountSaved          = { grams ->
+                        if (recipeIngredientIndex != null) {
+                            addEditViewModel?.updateIngredientAmount(recipeIngredientIndex, grams)
+                        }
                         navController.popBackStack()
                     }
                 )

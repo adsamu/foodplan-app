@@ -20,14 +20,13 @@ sealed interface RecipeDetailUiState {
     data class Success(
         val recipe: Recipe,
         val nutrition: RecipeNutrition,
-        /** Maps each ingredientId / subRecipeId → display name */
         val ingredientNames: Map<String, String>
     ) : RecipeDetailUiState
 }
 
 @HiltViewModel
 class RecipeDetailViewModel @Inject constructor(
-    private val recipeRepository: RecipeRepository,
+    private val recipeRepository:     RecipeRepository,
     private val ingredientRepository: IngredientRepository
 ) : ViewModel() {
 
@@ -45,52 +44,52 @@ class RecipeDetailViewModel @Inject constructor(
                 return@launch
             }
             currentRecipe = recipe
-            val data = computeRecipeData(recipe)
-            _uiState.value = RecipeDetailUiState.Success(
-                recipe = recipe,
-                nutrition = data.nutrition,
-                ingredientNames = data.ingredientNames
-            )
+
+            // Collect the live ingredient list — any name/macro change or deletion
+            // immediately recomputes the displayed names and nutrition.
+            ingredientRepository.getAllIngredients().collect { allIngredients ->
+                val data = computeRecipeData(recipe, allIngredients)
+                _uiState.value = RecipeDetailUiState.Success(
+                    recipe          = recipe,
+                    nutrition       = data.nutrition,
+                    ingredientNames = data.ingredientNames
+                )
+            }
         }
     }
 
     fun deleteRecipe() {
         val recipe = currentRecipe ?: return
-        viewModelScope.launch {
-            recipeRepository.deleteRecipe(recipe)
-        }
+        viewModelScope.launch { recipeRepository.deleteRecipe(recipe) }
     }
 
     private data class RecipeComputedData(
-        val nutrition: RecipeNutrition,
+        val nutrition:       RecipeNutrition,
         val ingredientNames: Map<String, String>
     )
 
-    private suspend fun computeRecipeData(recipe: Recipe): RecipeComputedData {
-        val ingredientIds = recipe.ingredients.mapNotNull { it.ingredientId }
-        val ingredientMap = mutableMapOf<String, Ingredient>()
-        for (id in ingredientIds) {
-            ingredientRepository.getIngredientById(id)?.let { ingredientMap[id] = it }
-        }
-        val subRecipeIds = recipe.ingredients.mapNotNull { it.subRecipeId }
-        val subRecipeNutritionMap = mutableMapOf<String, RecipeNutrition>()
-        val nameMap = mutableMapOf<String, String>()
+    private suspend fun computeRecipeData(
+        recipe:         Recipe,
+        allIngredients: List<Ingredient>
+    ): RecipeComputedData {
+        val ingredientMap = allIngredients.associateBy { it.id }
+        val nameMap       = mutableMapOf<String, String>()
+        val subNutrition  = mutableMapOf<String, RecipeNutrition>()
 
-        // Names for raw ingredients
-        ingredientMap.forEach { (id, ing) -> nameMap[id] = ing.name }
-
-        for (id in subRecipeIds) {
-            val subRecipe = recipeRepository.getRecipeWithIngredients(id) ?: continue
-            nameMap[id] = subRecipe.name
-            val subIngredientIds = subRecipe.ingredients.mapNotNull { it.ingredientId }
-            val subIngredientMap = mutableMapOf<String, Ingredient>()
-            for (subIngId in subIngredientIds) {
-                ingredientRepository.getIngredientById(subIngId)?.let { subIngredientMap[subIngId] = it }
-            }
-            subRecipeNutritionMap[id] = subRecipe.ingredients.computeNutrition(subIngredientMap, emptyMap())
+        // Raw ingredient names from the live list
+        recipe.ingredients.forEach { ri ->
+            ri.ingredientId?.let { id -> ingredientMap[id]?.let { nameMap[id] = it.name } }
         }
+
+        // Sub-recipe names and nutrition
+        recipe.ingredients.mapNotNull { it.subRecipeId }.distinct().forEach { subId ->
+            val sub = recipeRepository.getRecipeWithIngredients(subId) ?: return@forEach
+            nameMap[subId]  = sub.name
+            subNutrition[subId] = sub.ingredients.computeNutrition(ingredientMap, emptyMap())
+        }
+
         return RecipeComputedData(
-            nutrition = recipe.ingredients.computeNutrition(ingredientMap, subRecipeNutritionMap),
+            nutrition       = recipe.ingredients.computeNutrition(ingredientMap, subNutrition),
             ingredientNames = nameMap
         )
     }

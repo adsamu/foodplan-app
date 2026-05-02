@@ -57,7 +57,8 @@ fun IngredientDetailScreen(
     currentAmountGrams:     Double? = null,
     onBackClick:            () -> Unit,
     onEditClick:            (String) -> Unit,
-    onAmountSaved:          (index: Int, grams: Double) -> Unit = { _, _ -> },
+    onRemoveFromRecipe:     () -> Unit = {},
+    onAmountSaved:          (grams: Double) -> Unit = {},
     viewModel:              IngredientDetailViewModel = hiltViewModel()
 ) {
     val isRecipeContext = recipeIngredientIndex != null
@@ -91,12 +92,22 @@ fun IngredientDetailScreen(
                     }
                 },
                 actions = {
+                    // Standalone: edit and delete the ingredient itself
                     if (!isRecipeContext && uiState is IngredientDetailUiState.Success) {
                         IconButton(onClick = { onEditClick(ingredientId) }) {
                             Icon(Icons.Default.Edit, contentDescription = "Edit")
                         }
                         IconButton(onClick = { showDeleteDialog = true }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        }
+                    }
+                    // Recipe context: edit the raw ingredient data, or remove from recipe
+                    if (isRecipeContext && recipeIngredientIndex != null && uiState is IngredientDetailUiState.Success) {
+                        IconButton(onClick = { onEditClick(ingredientId) }) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit ingredient data")
+                        }
+                        IconButton(onClick = { onRemoveFromRecipe() }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Remove from recipe")
                         }
                     }
                 }
@@ -132,7 +143,7 @@ private fun IngredientDetailContent(
     isRecipeContext:       Boolean,
     recipeIngredientIndex: Int?,
     currentAmountGrams:    Double,
-    onAmountSaved:         (Int, Double) -> Unit,
+    onAmountSaved:         (Double) -> Unit,
     modifier:              Modifier,
 ) {
     // Amount state — only relevant in recipe context
@@ -204,7 +215,7 @@ private fun IngredientDetailContent(
                                 MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Button(
-                            onClick  = { onAmountSaved(recipeIngredientIndex, grams) },
+                            onClick  = { onAmountSaved(grams) },
                             modifier = Modifier.fillMaxWidth(),
                             shape    = RoundedCornerShape(50)
                         ) { Text("Save amount") }

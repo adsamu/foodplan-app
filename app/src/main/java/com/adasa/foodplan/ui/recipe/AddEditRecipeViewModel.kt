@@ -95,6 +95,10 @@ class AddEditRecipeViewModel @Inject constructor(
 
     fun loadRecipe(recipeId: String?) {
         if (recipeId == null) { _uiState.value = AddEditUiState.Ready; return }
+        // Don't reload if we already have this recipe in memory — prevents
+        // in-flight edits from being wiped when the composable re-enters
+        // composition after returning from a nested screen (IngredientDetail etc.)
+        if (editingRecipeId == recipeId) return
         viewModelScope.launch {
             _uiState.value = AddEditUiState.Loading
             val recipe = recipeRepository.getRecipeWithIngredients(recipeId)

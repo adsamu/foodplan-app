@@ -433,6 +433,11 @@ private fun IngredientRow(
             .padding(horizontal = 16.dp, vertical = 3.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .then(
+                if (ingredient.ingredientId != null)
+                    Modifier.clickable { onViewDetail(ingredient.ingredientId) }
+                else Modifier
+            )
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -452,15 +457,11 @@ private fun IngredientRow(
                 amountText = text
                 text.toDoubleOrNull()?.let { onAmountChange(it) }
             })
-            if (ingredient.ingredientId != null) {
-                IconButton(
-                    onClick  = { onViewDetail(ingredient.ingredientId) },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Text("›", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
+            // Stop click propagation on remove so it doesn't also open the detail screen
+            IconButton(
+                onClick  = { onRemove() },
+                modifier = Modifier.size(28.dp)
+            ) {
                 Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(14.dp))
             }
         }

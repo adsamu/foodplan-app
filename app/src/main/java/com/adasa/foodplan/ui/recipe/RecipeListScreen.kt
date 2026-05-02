@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adasa.foodplan.domain.model.Ingredient
+import com.adasa.foodplan.domain.model.IngredientCategory
 import com.adasa.foodplan.domain.model.MealCategory
 import com.adasa.foodplan.domain.model.Recipe
 import com.adasa.foodplan.domain.model.RecipeType
@@ -125,7 +126,7 @@ fun RecipeListScreen(
                     val categories = (uiState as? RecipeListUiState.Success)?.ingredientCategories ?: emptyList()
                     if (categories.isNotEmpty()) {
                         LazyRow(
-                            contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                            contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             item {
@@ -140,7 +141,7 @@ fun RecipeListScreen(
                                 FilterChip(
                                     selected = activeIngCat == cat,
                                     onClick  = { viewModel.onIngredientCatChange(cat) },
-                                    label    = { Text(cat) },
+                                    label    = { Text("${cat.emoji} ${cat.displayName}") },
                                     shape    = RoundedCornerShape(8.dp)
                                 )
                             }
@@ -301,9 +302,9 @@ private fun IngredientCard(ingredient: Ingredient, onClick: () -> Unit) {
                     maxLines   = 1,
                     overflow   = TextOverflow.Ellipsis
                 )
-                if (ingredient.category.isNotBlank()) {
+                if (ingredient.category != IngredientCategory.OTHER || true) {
                     Text(
-                        ingredient.category,
+                        "${ingredient.category.emoji} ${ingredient.category.displayName}",
                         style  = MaterialTheme.typography.bodySmall,
                         color  = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1

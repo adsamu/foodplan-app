@@ -96,12 +96,12 @@ class GetShoppingListUseCase @Inject constructor(
         // 8. Group by category
         val categories = items
             .groupBy { item ->
-                ingredientCache[item.ingredientId]?.category ?: "Other"
+                ingredientCache[item.ingredientId]?.category
             }
-            .map { (categoryName, categoryItems) ->
+            .map { (category, categoryItems) ->
                 ShoppingCategory(
-                    name = categoryName,
-                    emoji = emojiForCategory(categoryName),
+                    name  = category?.displayName ?: "Other",
+                    emoji = category?.emoji ?: "🛒",
                     items = categoryItems.sortedBy { it.name }
                 )
             }
@@ -177,21 +177,4 @@ class GetShoppingListUseCase @Inject constructor(
         }
     }
 
-    private fun emojiForCategory(category: String): String = when {
-        category.contains("kött", ignoreCase = true) ||
-                category.contains("fisk", ignoreCase = true) ||
-                category.contains("protein", ignoreCase = true) -> "🥩"
-        category.contains("mejeri", ignoreCase = true) ||
-                category.contains("ägg", ignoreCase = true) -> "🥚"
-        category.contains("spannmål", ignoreCase = true) ||
-                category.contains("torr", ignoreCase = true) ||
-                category.contains("pasta", ignoreCase = true) ||
-                category.contains("ris", ignoreCase = true) -> "🌾"
-        category.contains("grönsak", ignoreCase = true) ||
-                category.contains("frukt", ignoreCase = true) -> "🥦"
-        category.contains("konserv", ignoreCase = true) ||
-                category.contains("sås", ignoreCase = true) -> "🥫"
-        category.contains("fryst", ignoreCase = true) -> "❄️"
-        else -> "🛒"
-    }
 }

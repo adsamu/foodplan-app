@@ -267,7 +267,7 @@ private fun IngredientPickerSheet(
                             overflow   = TextOverflow.Ellipsis
                         )
                         Text(
-                            item.category,
+                            item.category.displayName,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

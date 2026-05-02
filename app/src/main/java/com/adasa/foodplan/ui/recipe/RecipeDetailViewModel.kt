@@ -14,13 +14,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** One section of instructions — title=null means the main recipe's own steps. */
+data class InstructionSection(val title: String?, val steps: List<String>)
+
 sealed interface RecipeDetailUiState {
     data object Loading : RecipeDetailUiState
     data object NotFound : RecipeDetailUiState
     data class Success(
         val recipe: Recipe,
         val nutrition: RecipeNutrition,
-        val ingredientNames: Map<String, String>
+        val ingredientNames: Map<String, String>,
+        val instructionSections: List<InstructionSection>,
     ) : RecipeDetailUiState
 }
 
@@ -50,9 +54,10 @@ class RecipeDetailViewModel @Inject constructor(
             ingredientRepository.getAllIngredients().collect { allIngredients ->
                 val data = computeRecipeData(recipe, allIngredients)
                 _uiState.value = RecipeDetailUiState.Success(
-                    recipe          = recipe,
-                    nutrition       = data.nutrition,
-                    ingredientNames = data.ingredientNames
+                    recipe               = recipe,
+                    nutrition            = data.nutrition,
+                    ingredientNames      = data.ingredientNames,
+                    instructionSections  = data.instructionSections,
                 )
             }
         }
@@ -64,8 +69,9 @@ class RecipeDetailViewModel @Inject constructor(
     }
 
     private data class RecipeComputedData(
-        val nutrition:       RecipeNutrition,
-        val ingredientNames: Map<String, String>
+        val nutrition:           RecipeNutrition,
+        val ingredientNames:     Map<String, String>,
+        val instructionSections: List<InstructionSection>,
     )
 
     private suspend fun computeRecipeData(
@@ -75,22 +81,43 @@ class RecipeDetailViewModel @Inject constructor(
         val ingredientMap = allIngredients.associateBy { it.id }
         val nameMap       = mutableMapOf<String, String>()
         val subNutrition  = mutableMapOf<String, RecipeNutrition>()
+        val sections      = mutableListOf<InstructionSection>()
 
-        // Raw ingredient names from the live list
+        // Raw ingredient names
         recipe.ingredients.forEach { ri ->
             ri.ingredientId?.let { id -> ingredientMap[id]?.let { nameMap[id] = it.name } }
         }
 
-        // Sub-recipe names and nutrition
+        // Sub-recipe names + nutrition
         recipe.ingredients.mapNotNull { it.subRecipeId }.distinct().forEach { subId ->
             val sub = recipeRepository.getRecipeWithIngredients(subId) ?: return@forEach
-            nameMap[subId]  = sub.name
+            nameMap[subId]      = sub.name
             subNutrition[subId] = sub.ingredients.computeNutrition(ingredientMap, emptyMap())
         }
 
+        // ── Instruction sections ─────────────────────────────────────────────
+        // Main recipe steps — no header
+        if (recipe.steps.isNotEmpty()) {
+            sections += InstructionSection(title = null, steps = recipe.steps)
+        }
+        // Per ingredient/sub-recipe — in ingredient order
+        recipe.ingredients.forEach { ri ->
+            when {
+                ri.ingredientId != null -> {
+                    val ing = ingredientMap[ri.ingredientId] ?: return@forEach
+                    if (ing.steps.isNotEmpty()) sections += InstructionSection(ing.name, ing.steps)
+                }
+                ri.subRecipeId != null -> {
+                    val sub = recipeRepository.getRecipeWithIngredients(ri.subRecipeId) ?: return@forEach
+                    if (sub.steps.isNotEmpty()) sections += InstructionSection(sub.name, sub.steps)
+                }
+            }
+        }
+
         return RecipeComputedData(
-            nutrition       = recipe.ingredients.computeNutrition(ingredientMap, subNutrition),
-            ingredientNames = nameMap
+            nutrition           = recipe.ingredients.computeNutrition(ingredientMap, subNutrition),
+            ingredientNames     = nameMap,
+            instructionSections = sections,
         )
     }
 }

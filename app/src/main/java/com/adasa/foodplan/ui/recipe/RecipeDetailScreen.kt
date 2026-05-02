@@ -190,13 +190,15 @@ fun RecipeDetailScreen(
                     }
 
                     // ── Instructions ──────────────────────────────────────────
-                    if (state.recipe.steps.isNotEmpty()) {
+                    if (state.instructionSections.isNotEmpty()) {
                         item {
                             DetailSectionLabel(
                                 text     = "Instructions",
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
-                            InstructionsCard(steps = state.recipe.steps)
+                        }
+                        item {
+                            CombinedInstructionsCard(sections = state.instructionSections)
                         }
                     }
                 }
@@ -349,33 +351,46 @@ private fun IngredientDetailRow(name: String, amount: String, isComponent: Boole
 }
 
 @Composable
-private fun InstructionsCard(steps: List<String>) {
-    // Parse serialised steps — timers are "TIMER|label|seconds"
-    data class ParsedStep(val isTimer: Boolean, val text: String, val label: String, val totalSeconds: Int)
-    val parsed = remember(steps) {
-        steps.map { s ->
-            if (s.startsWith("TIMER|")) {
-                val parts = s.removePrefix("TIMER|").split("|")
-                ParsedStep(true, "", parts.getOrElse(0) { "" }, parts.getOrElse(1) { "0" }.toIntOrNull() ?: 0)
-            } else {
-                ParsedStep(false, s, "", 0)
+private fun CombinedInstructionsCard(sections: List<com.adasa.foodplan.ui.recipe.InstructionSection>) {
+    // Flatten all steps, keeping track of which section they belong to
+    // so we can insert section headers and maintain a global step counter.
+    data class FlatItem(
+        val sectionTitle: String?,  // non-null = first item of a new section
+        val step: String,
+        val globalIndex: Int,       // index into the combined list, for state arrays
+    )
+
+    val flat = buildList {
+        var globalIdx = 0
+        sections.forEach { section ->
+            section.steps.forEach { step ->
+                add(FlatItem(
+                    sectionTitle = if (step == section.steps.first()) section.title else null,
+                    step         = step,
+                    globalIndex  = globalIdx++,
+                ))
             }
         }
     }
 
-    val checkedSteps   = remember(steps.size) { mutableStateListOf(*Array(steps.size) { false }) }
-    val timerRemaining = remember(steps) { mutableStateListOf(*Array(steps.size) { parsed[it].totalSeconds }) }
-    val timerRunning   = remember(steps.size) { mutableStateListOf(*Array(steps.size) { false }) }
+    val totalSteps     = flat.size
+    val checkedSteps   = remember(totalSteps) { mutableStateListOf(*Array(totalSteps) { false }) }
+    val timerRemaining = remember(flat.map { it.step }) {
+        mutableStateListOf(*Array(totalSteps) { i ->
+            val s = flat[i].step
+            if (s.startsWith("TIMER|")) s.removePrefix("TIMER|").split("|").getOrElse(1) { "0" }.toIntOrNull() ?: 0
+            else 0
+        })
+    }
+    val timerRunning = remember(totalSteps) { mutableStateListOf(*Array(totalSteps) { false }) }
 
-    parsed.forEachIndexed { index, p ->
-        if (p.isTimer) {
-            LaunchedEffect(timerRunning[index]) {
-                if (timerRunning[index]) {
-                    while (timerRemaining[index] > 0) {
-                        kotlinx.coroutines.delay(1000L)
-                        timerRemaining[index]--
-                    }
-                    timerRunning[index] = false
+    // Countdown coroutines
+    flat.forEachIndexed { i, item ->
+        if (item.step.startsWith("TIMER|")) {
+            LaunchedEffect(timerRunning[i]) {
+                if (timerRunning[i]) {
+                    while (timerRemaining[i] > 0) { kotlinx.coroutines.delay(1000L); timerRemaining[i]-- }
+                    timerRunning[i] = false
                 }
             }
         }
@@ -389,84 +404,78 @@ private fun InstructionsCard(steps: List<String>) {
         colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            parsed.forEachIndexed { index, p ->
-                if (p.isTimer) {
-                    val remaining  = timerRemaining[index]
-                    val isRunning  = timerRunning[index]
+            flat.forEachIndexed { i, item ->
+                // Section header (title=null means main recipe — no header printed)
+                if (item.sectionTitle != null) {
+                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                    Text(
+                        item.sectionTitle,
+                        style      = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color      = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                val rawStep = item.step
+                if (rawStep.startsWith("TIMER|")) {
+                    val parts      = rawStep.removePrefix("TIMER|").split("|")
+                    val label      = parts.getOrElse(0) { "" }
+                    val totalSecs  = parts.getOrElse(1) { "0" }.toIntOrNull() ?: 0
+                    val remaining  = timerRemaining[i]
+                    val isRunning  = timerRunning[i]
                     val isDone     = remaining == 0
-                    val timerColor = when {
-                        isDone    -> CarbsColor
-                        isRunning -> FatColor
-                        else      -> MaterialTheme.colorScheme.primary
-                    }
+                    val timerColor = when { isDone -> CarbsColor; isRunning -> FatColor; else -> MaterialTheme.colorScheme.primary }
+
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
                             .background(MaterialTheme.colorScheme.secondaryContainer)
                             .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment     = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text("⏱", fontSize = 18.sp)
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "%02d:%02d".format(remaining / 60, remaining % 60),
-                                style      = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color      = timerColor
-                            )
-                            if (p.label.isNotBlank()) {
-                                Text(p.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                            }
+                            Text("%02d:%02d".format(remaining / 60, remaining % 60),
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = timerColor)
+                            if (label.isNotBlank()) Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
                         }
                         if (!isDone) {
                             FilledTonalButton(
-                                onClick        = { timerRunning[index] = !isRunning },
+                                onClick = { timerRunning[i] = !isRunning },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                colors         = ButtonDefaults.filledTonalButtonColors(containerColor = timerColor, contentColor = MaterialTheme.colorScheme.onPrimary)
-                            ) {
-                                Text(if (isRunning) "Pause" else "Start", style = MaterialTheme.typography.labelMedium)
-                            }
+                                colors = ButtonDefaults.filledTonalButtonColors(containerColor = timerColor, contentColor = MaterialTheme.colorScheme.onPrimary)
+                            ) { Text(if (isRunning) "Pause" else "Start", style = MaterialTheme.typography.labelMedium) }
                         }
                         OutlinedButton(
-                            onClick        = { timerRemaining[index] = p.totalSeconds; timerRunning[index] = false },
+                            onClick = { timerRemaining[i] = totalSecs; timerRunning[i] = false },
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Text("Reset", style = MaterialTheme.typography.labelMedium)
-                        }
+                        ) { Text("Reset", style = MaterialTheme.typography.labelMedium) }
                     }
                 } else {
                     textStepCounter++
-                    val checked = checkedSteps.getOrElse(index) { false }
+                    val checked = checkedSteps.getOrElse(i) { false }
                     Row(
-                        verticalAlignment     = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier              = Modifier.clickable { checkedSteps[index] = !checked }
+                        modifier = Modifier.clickable { checkedSteps[i] = !checked }
                     ) {
                         Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .then(
-                                    if (checked) Modifier.background(MaterialTheme.colorScheme.primary)
-                                    else Modifier.background(Color.Transparent).border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                                ),
+                            modifier = Modifier.size(28.dp).clip(CircleShape).then(
+                                if (checked) Modifier.background(MaterialTheme.colorScheme.primary)
+                                else Modifier.background(Color.Transparent).border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                            ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                "$textStepCounter",
-                                color      = if (checked) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.outlineVariant,
-                                style      = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("$textStepCounter",
+                                color = if (checked) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.outlineVariant,
+                                style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         }
                         Text(
-                            text           = p.text,
-                            style          = MaterialTheme.typography.bodyMedium,
+                            rawStep,
+                            style = MaterialTheme.typography.bodyMedium,
                             textDecoration = if (checked) TextDecoration.LineThrough else TextDecoration.None,
-                            color          = if (checked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                            modifier       = Modifier.weight(1f)
+                            color = if (checked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }

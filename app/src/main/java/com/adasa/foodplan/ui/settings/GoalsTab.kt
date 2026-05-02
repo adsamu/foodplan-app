@@ -262,7 +262,7 @@ private fun PowderPickerSheet(
             val ingredient = Ingredient(
                 id             = state.ingredientId,
                 name           = addName,
-                category       = "Kosttillskott",
+                category       = IngredientCategory.SUPPLEMENT,
                 kcalPer100g    = addKcal,
                 proteinPer100g = addProtein,
                 fatPer100g     = addFat,
@@ -337,7 +337,7 @@ private fun PowderPickerSheet(
                 TextButton(
                     onClick  = {
                         addEditVM.loadIngredient(null)
-                        addEditVM.onCategoryChange("Kosttillskott")
+                        addEditVM.onCategoryChange(IngredientCategory.SUPPLEMENT)
                         step = PickerStep.Create
                     },
                     modifier = Modifier
@@ -504,7 +504,7 @@ private fun PowderRow(ingredient: Ingredient, isCurrent: Boolean, onClick: () ->
                     }
                 }
             }
-            Text(ingredient.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(ingredient.category.displayName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 3.dp)) {
                 MacroBadge("${ingredient.proteinPer100g.toInt()}g P / 100g", ProteinColor)
                 MacroBadge("${ingredient.kcalPer100g.toInt()} kcal", FatColor)

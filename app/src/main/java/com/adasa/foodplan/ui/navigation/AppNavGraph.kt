@@ -67,6 +67,7 @@ fun AppNavGraph(
     val showBottomBar = currentRoute in topLevelRoutes
 
     Scaffold(
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {

@@ -32,7 +32,7 @@ import com.adasa.foodplan.data.local.entity.BatchCookingGroupEntity
         MealSlotConfigEntity::class,
         BatchCookingGroupEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

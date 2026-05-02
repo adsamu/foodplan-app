@@ -21,11 +21,11 @@ sealed interface StepUi {
 
 // Serialisation helpers — stored as plain strings in Recipe.steps
 private const val TIMER_PREFIX = "TIMER|"
-private fun StepUi.serialise(): String = when (this) {
+internal fun StepUi.serialise(): String = when (this) {
     is StepUi.TextStep  -> text
     is StepUi.TimerStep -> "$TIMER_PREFIX$label|$totalSeconds"
 }
-private fun String.deserialiseStep(): StepUi {
+internal fun String.deserialiseStep(): StepUi {
     val id = UUID.randomUUID().toString()
     return if (startsWith(TIMER_PREFIX)) {
         val rest  = removePrefix(TIMER_PREFIX)

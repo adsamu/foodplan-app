@@ -31,141 +31,141 @@ class DatabaseSeeder @Inject constructor(
         val all = listOf(
 
             // Protein – kyckling
-            i("ing_kyckling_kronfagel", "Kycklingbröstfilé (Kronfågel)", "Protein – kyckling",
+            i("ing_kyckling_kronfagel", "Kycklingbröstfilé (Kronfågel)", IngredientCategory.MEAT,
                 90.0, 19.0, 2.0, 0.0, IngredientSource.LABEL),
-            i("ing_kyckling_lindstroms", "Kyckling (Lindströms)", "Protein – kyckling",
+            i("ing_kyckling_lindstroms", "Kyckling (Lindströms)", IngredientCategory.MEAT,
                 104.0, 22.0, 2.0, 0.0, IngredientSource.LABEL),
-            i("ing_kyckling_guldfagel", "Kycklingbröstfilé (Guldfågel)", "Protein – kyckling",
+            i("ing_kyckling_guldfagel", "Kycklingbröstfilé (Guldfågel)", IngredientCategory.MEAT,
                 120.0, 23.0, 2.0, 0.0, IngredientSource.LABEL),
 
             // Protein – fisk
-            i("ing_lax", "Lax (rå)", "Protein – fisk",
+            i("ing_lax", "Lax (rå)", IngredientCategory.FISH,
                 188.0, 20.0, 13.0, 0.0, IngredientSource.LIVSMEDELSVERKET),
-            i("ing_tonfisk", "Tonfisk i vatten (ICA)", "Protein – fisk",
+            i("ing_tonfisk", "Tonfisk i vatten (ICA)", IngredientCategory.FISH,
                 110.0, 24.0, 1.0, 0.0, IngredientSource.LABEL),
 
             // Protein – kött
-            i("ing_nottfars_12", "Nöttfärs 12% (rå)", "Protein – kött",
+            i("ing_nottfars_12", "Nöttfärs 12% (rå)", IngredientCategory.MEAT,
                 184.0, 19.0, 12.0, 0.0, IngredientSource.LABEL),
-            i("ing_nottfars_5", "Nöttfärs 5% (rå)", "Protein – kött",
+            i("ing_nottfars_5", "Nöttfärs 5% (rå)", IngredientCategory.MEAT,
                 107.0, 21.0, 3.0, 0.0, IngredientSource.CALCULATED),
-            i("ing_biff_ryggbiff", "Biff ryggbiff nöt", "Protein – kött",
+            i("ing_biff_ryggbiff", "Biff ryggbiff nöt", IngredientCategory.MEAT,
                 120.0, 22.0, 4.0, 0.0, IngredientSource.LIVSMEDELSVERKET),
 
             // Protein – ägg
-            i("ing_agg", "Ägg", "Protein – ägg",
+            i("ing_agg", "Ägg", IngredientCategory.DAIRY_EGGS,
                 143.0, 13.0, 10.0, 0.0, IngredientSource.LIVSMEDELSVERKET),
 
             // Mejeri
-            i("ing_creme_fraiche", "Lätt crème fraîche (ICA)", "Mejeri",
+            i("ing_creme_fraiche", "Lätt crème fraîche (ICA)", IngredientCategory.DAIRY_EGGS,
                 150.0, 3.0, 7.0, 4.0, IngredientSource.LABEL),
-            i("ing_matlagningsgradde", "Matlagningsgrädde 15%", "Mejeri",
+            i("ing_matlagningsgradde", "Matlagningsgrädde 15%", IngredientCategory.DAIRY_EGGS,
                 160.0, 3.0, 15.0, 4.0, IngredientSource.LABEL),
-            i("ing_graddfil", "Gräddfil", "Mejeri",
+            i("ing_graddfil", "Gräddfil", IngredientCategory.DAIRY_EGGS,
                 138.0, 3.0, 12.0, 4.0, IngredientSource.LABEL),
-            i("ing_mozzarella", "Mozzarella (Arla)", "Mejeri",
+            i("ing_mozzarella", "Mozzarella (Arla)", IngredientCategory.DAIRY_EGGS,
                 303.0, 27.0, 23.0, 0.0, IngredientSource.LABEL),
-            i("ing_arla_ost", "Arla Köket mager ost 12%", "Mejeri",
+            i("ing_arla_ost", "Arla Köket mager ost 12%", IngredientCategory.DAIRY_EGGS,
                 243.0, 30.0, 13.0, 0.0, IngredientSource.LABEL),
-            i("ing_mjolk_laktos", "Mjölk laktosfri 1.5%", "Mejeri",
+            i("ing_mjolk_laktos", "Mjölk laktosfri 1.5%", IngredientCategory.DAIRY_EGGS,
                 45.0, 4.0, 2.0, 5.0, IngredientSource.LABEL),
-            i("ing_smor", "Smör (Arla)", "Mejeri",
+            i("ing_smor", "Smör (Arla)", IngredientCategory.DAIRY_EGGS,
                 714.0, 1.0, 80.0, 0.0, IngredientSource.LABEL),
-            i("ing_tzatsiki", "Tzatsiki (Fontana)", "Mejeri",
+            i("ing_tzatsiki", "Tzatsiki (Fontana)", IngredientCategory.DAIRY_EGGS,
                 131.0, 5.4, 10.1, 4.5, IngredientSource.LABEL),
-            i("ing_smelteost", "Smelteost cheddar (Country Cow)", "Mejeri",
+            i("ing_smelteost", "Smelteost cheddar (Country Cow)", IngredientCategory.DAIRY_EGGS,
                 308.0, 10.0, 25.0, 4.0, IngredientSource.LABEL),
-            i("ing_grekghurt_larsa", "Grekisk Yoghurt 0% (Larsa)", "Mejeri",
+            i("ing_grekghurt_larsa", "Grekisk Yoghurt 0% (Larsa)", IngredientCategory.DAIRY_EGGS,
                 59.0, 10.0, 0.0, 4.0, IngredientSource.LABEL),
-            i("ing_grekghurt_arla", "Grekisk Yoghurt 0.2% (Arla)", "Mejeri",
+            i("ing_grekghurt_arla", "Grekisk Yoghurt 0.2% (Arla)", IngredientCategory.DAIRY_EGGS,
                 60.0, 11.0, 0.0, 4.0, IngredientSource.LABEL),
 
             // Spannmål – torrt
-            i("ing_jasminris", "Jasminris (okokt)", "Spannmål – torrt",
+            i("ing_jasminris", "Jasminris (okokt)", IngredientCategory.GRAINS,
                 349.0, 7.0, 1.0, 78.0, IngredientSource.LABEL),
-            i("ing_bovete", "Bovete Ekologiskt (Garant, torrt)", "Spannmål – torrt",
+            i("ing_bovete", "Bovete Ekologiskt (Garant, torrt)", IngredientCategory.GRAINS,
                 356.0, 8.0, 1.0, 74.0, IngredientSource.LABEL),
-            i("ing_fullkornspasta", "Fullkornspasta (Garant, torr)", "Spannmål – torrt",
+            i("ing_fullkornspasta", "Fullkornspasta (Garant, torr)", IngredientCategory.GRAINS,
                 350.0, 12.0, 2.0, 67.0, IngredientSource.LABEL),
-            i("ing_cavatappi", "Cavatappi pasta (De Cecco, torr)", "Spannmål – torrt",
+            i("ing_cavatappi", "Cavatappi pasta (De Cecco, torr)", IngredientCategory.GRAINS,
                 358.0, 12.0, 2.0, 71.0, IngredientSource.LABEL),
-            i("ing_basmatiris", "Basmatiris vit (torrt)", "Spannmål – torrt",
+            i("ing_basmatiris", "Basmatiris vit (torrt)", IngredientCategory.GRAINS,
                 365.0, 7.0, 1.0, 80.0, IngredientSource.LABEL),
-            i("ing_japansktris", "Japanskt ris (okokt)", "Spannmål – torrt",
+            i("ing_japansktris", "Japanskt ris (okokt)", IngredientCategory.GRAINS,
                 355.0, 8.0, 1.0, 77.0, IngredientSource.LABEL),
 
             // Grönsaker
-            i("ing_potatis", "Potatis", "Grönsak",
+            i("ing_potatis", "Potatis", IngredientCategory.FRUIT_VEG,
                 79.0, 2.0, 0.0, 17.0, IngredientSource.LIVSMEDELSVERKET),
-            i("ing_gullok", "Gullök", "Grönsak",
+            i("ing_gullok", "Gullök", IngredientCategory.FRUIT_VEG,
                 32.0, 2.0, 0.0, 7.0, IngredientSource.LABEL),
-            i("ing_krossade_tomater", "Krossade tomater", "Grönsak",
+            i("ing_krossade_tomater", "Krossade tomater", IngredientCategory.FRUIT_VEG,
                 22.0, 1.0, 0.0, 4.0, IngredientSource.LABEL),
-            i("ing_gurka", "Gurka", "Grönsak",
+            i("ing_gurka", "Gurka", IngredientCategory.FRUIT_VEG,
                 12.0, 1.0, 0.0, 2.0, IngredientSource.LABEL),
-            i("ing_rodlok", "Rödlök", "Grönsak",
+            i("ing_rodlok", "Rödlök", IngredientCategory.FRUIT_VEG,
                 40.0, 1.0, 0.0, 9.0, IngredientSource.LABEL),
-            i("ing_paprika", "Paprika", "Grönsak",
+            i("ing_paprika", "Paprika", IngredientCategory.FRUIT_VEG,
                 31.0, 1.0, 0.0, 6.0, IngredientSource.LABEL),
-            i("ing_vitlok", "Vitlök", "Grönsak",
+            i("ing_vitlok", "Vitlök", IngredientCategory.FRUIT_VEG,
                 135.0, 6.0, 1.0, 28.0, IngredientSource.LABEL),
-            i("ing_basilika", "Basilika (färsk)", "Grönsak",
+            i("ing_basilika", "Basilika (färsk)", IngredientCategory.FRUIT_VEG,
                 23.0, 3.0, 1.0, 1.0, IngredientSource.LABEL),
-            i("ing_morotter", "Morötter", "Grönsak",
+            i("ing_morotter", "Morötter", IngredientCategory.FRUIT_VEG,
                 38.0, 1.0, 0.0, 8.0, IngredientSource.LABEL),
-            i("ing_salladslok", "Salladslök", "Grönsak",
+            i("ing_salladslok", "Salladslök", IngredientCategory.FRUIT_VEG,
                 30.0, 2.0, 0.0, 5.0, IngredientSource.LABEL),
-            i("ing_dill", "Dill (färsk)", "Grönsak",
+            i("ing_dill", "Dill (färsk)", IngredientCategory.FRUIT_VEG,
                 43.0, 3.0, 1.0, 4.0, IngredientSource.LABEL),
 
             // Frukt
-            i("ing_banan", "Banan", "Frukt",
+            i("ing_banan", "Banan", IngredientCategory.FRUIT_VEG,
                 83.0, 1.0, 0.0, 19.0, IngredientSource.LABEL),
 
             // Frö/nötter
-            i("ing_sesamfro", "Sesamfrö (GoGreen)", "Frö/nötter",
+            i("ing_sesamfro", "Sesamfrö (GoGreen)", IngredientCategory.NUTS,
                 600.0, 20.0, 53.0, 12.0, IngredientSource.LABEL),
 
             // Fryst
-            i("ing_frysta_artor", "Frysta ärtor", "Fryst",
+            i("ing_frysta_artor", "Frysta ärtor", IngredientCategory.FROZEN,
                 73.0, 5.0, 0.0, 12.0, IngredientSource.LABEL),
 
             // Bröd
-            i("ing_tortilla", "Tortilla Large (ICA)", "Bröd",
+            i("ing_tortilla", "Tortilla Large (ICA)", IngredientCategory.BREAD_BAKERY,
                 302.0, 8.3, 4.9, 55.0, IngredientSource.LABEL),
-            i("ing_burgarbrod", "Potato Burger Bun (Korvbröds Bagarn)", "Bröd",
+            i("ing_burgarbrod", "Potato Burger Bun (Korvbröds Bagarn)", IngredientCategory.BREAD_BAKERY,
                 280.0, 9.0, 5.0, 50.0, IngredientSource.LABEL),
 
             // Flingor/müsli
-            i("ing_musli_gold", "Gold BERRIES musli", "Flingor/müsli",
+            i("ing_musli_gold", "Gold BERRIES musli", IngredientCategory.DRY_GOODS,
                 422.0, 10.0, 16.0, 55.0, IngredientSource.LABEL),
-            i("ing_musli_frebaco", "Frebaco Müsli (Persika Hallon)", "Flingor/müsli",
+            i("ing_musli_frebaco", "Frebaco Müsli (Persika Hallon)", IngredientCategory.DRY_GOODS,
                 320.0, 12.0, 4.0, 60.0, IngredientSource.LABEL),
 
             // Buljong
-            i("ing_kalvbuljong", "Kalvbuljong (Knorr)", "Buljong",
+            i("ing_kalvbuljong", "Kalvbuljong (Knorr)", IngredientCategory.OILS_SAUCES,
                 170.0, 4.0, 0.0, 38.0, IngredientSource.LABEL),
-            i("ing_gronsaksbuljong", "Grönsaksbuljong", "Buljong",
+            i("ing_gronsaksbuljong", "Grönsaksbuljong", IngredientCategory.OILS_SAUCES,
                 10.0, 1.0, 0.0, 2.0, IngredientSource.LABEL),
 
             // Sås
-            i("ing_kinesisk_soja", "Kinesisk Soja", "Sås",
+            i("ing_kinesisk_soja", "Kinesisk Soja", IngredientCategory.OILS_SAUCES,
                 50.0, 5.0, 0.0, 8.0, IngredientSource.LABEL),
-            i("ing_ostronsas", "Ostronsås", "Sås",
+            i("ing_ostronsas", "Ostronsås", IngredientCategory.OILS_SAUCES,
                 51.0, 2.0, 0.0, 13.0, IngredientSource.LABEL),
-            i("ing_dijonsenap", "Dijonsenap", "Sås",
+            i("ing_dijonsenap", "Dijonsenap", IngredientCategory.OILS_SAUCES,
                 70.0, 4.0, 4.0, 5.0, IngredientSource.LABEL),
 
             // Fett
-            i("ing_rapsolja", "Rapsolja", "Fett",
+            i("ing_rapsolja", "Rapsolja", IngredientCategory.OILS_SAUCES,
                 900.0, 0.0, 100.0, 0.0, IngredientSource.LABEL),
-            i("ing_sesamolja", "Sesamolja", "Fett",
+            i("ing_sesamolja", "Sesamolja", IngredientCategory.OILS_SAUCES,
                 884.0, 0.0, 100.0, 0.0, IngredientSource.LABEL),
 
             // Konserv
-            i("ing_tomatpure", "Tomatpuré", "Konserv",
+            i("ing_tomatpure", "Tomatpuré", IngredientCategory.CANNED,
                 82.0, 4.0, 0.0, 16.0, IngredientSource.LABEL),
-            i("ing_gochujang", "Gochujang", "Konserv",
+            i("ing_gochujang", "Gochujang", IngredientCategory.CANNED,
                 200.0, 5.0, 5.0, 35.0, IngredientSource.LABEL),
         )
         ingredientRepository.saveIngredients(all)
@@ -491,7 +491,7 @@ class DatabaseSeeder @Inject constructor(
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun i(
-        id: String, name: String, category: String,
+        id: String, name: String, category: IngredientCategory,
         kcal: Double, protein: Double, fat: Double, carbs: Double,
         source: IngredientSource = IngredientSource.LABEL
     ) = Ingredient(

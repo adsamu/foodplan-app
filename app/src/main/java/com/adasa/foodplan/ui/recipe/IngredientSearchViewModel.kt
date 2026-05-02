@@ -8,10 +8,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
+import com.adasa.foodplan.domain.model.IngredientCategory
+
 data class IngredientResultItem(
     val id:            String,
     val name:          String,
-    val category:      String,
+    val category:      IngredientCategory,
     val kcalPer100g:   Double,
     val proteinPer100g: Double,
     val fatPer100g:    Double,

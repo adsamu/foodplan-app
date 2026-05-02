@@ -3,6 +3,7 @@ package com.adasa.foodplan.ui.ingredient
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adasa.foodplan.domain.model.Ingredient
+import com.adasa.foodplan.domain.model.IngredientCategory
 
 private val ProteinColor = Color(0xFF534AB7)
 private val FatColor     = Color(0xFFBA7517)
@@ -242,7 +244,7 @@ private fun IngredientDetailContent(
                     Spacer(Modifier.height(4.dp))
                     Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)) {
                         Text(
-                            ingredient.category,
+                            "${ingredient.category.emoji} ${ingredient.category.displayName}",
                             style    = MaterialTheme.typography.labelSmall,
                             color    = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -296,6 +298,17 @@ private fun IngredientDetailContent(
                     NutritionRow("Source", ingredient.source.displayName,
                         valueColor = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+        }
+
+        // ── Instructions ──────────────────────────────────────────────────
+        if (ingredient.steps.isNotEmpty()) {
+            item {
+                IngDetailSectionLabel("Instructions",
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            }
+            item {
+                IngredientInstructionsCard(steps = ingredient.steps)
             }
         }
     }
@@ -362,5 +375,126 @@ private fun NutritionRow(label: String, value: String, valueColor: Color = Color
         Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium,
             color = if (valueColor == Color.Unspecified) MaterialTheme.colorScheme.onSurface else valueColor)
+    }
+}
+
+// ── Instructions card — same timer/step rendering as RecipeDetailScreen ───────
+
+@Composable
+private fun IngredientInstructionsCard(steps: List<String>) {
+    val parsed = remember(steps) {
+        steps.map { s ->
+            if (s.startsWith("TIMER|")) {
+                val parts = s.removePrefix("TIMER|").split("|")
+                Triple(true, parts.getOrElse(0) { "" }, parts.getOrElse(1) { "0" }.toIntOrNull() ?: 0)
+            } else {
+                Triple(false, s, 0)
+            }
+        }
+    }
+
+    val checkedSteps   = remember(steps.size) { mutableStateListOf(*Array(steps.size) { false }) }
+    val timerRemaining = remember(steps) { mutableStateListOf(*Array(steps.size) { parsed[it].third }) }
+    val timerRunning   = remember(steps.size) { mutableStateListOf(*Array(steps.size) { false }) }
+
+    parsed.forEachIndexed { i, (isTimer, _, _) ->
+        if (isTimer) {
+            LaunchedEffect(timerRunning[i]) {
+                if (timerRunning[i]) {
+                    while (timerRemaining[i] > 0) { kotlinx.coroutines.delay(1000L); timerRemaining[i]-- }
+                    timerRunning[i] = false
+                }
+            }
+        }
+    }
+
+    val timerAmber  = Color(0xFFBA7517)
+    val timerGreen  = Color(0xFF1D9E75)
+    var stepCounter = 0
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape    = RoundedCornerShape(14.dp),
+        colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            parsed.forEachIndexed { i, (isTimer, text, totalSecs) ->
+                if (isTimer) {
+                    val remaining  = timerRemaining[i]
+                    val isRunning  = timerRunning[i]
+                    val isDone     = remaining == 0
+                    val timerColor = when { isDone -> timerGreen; isRunning -> timerAmber; else -> MaterialTheme.colorScheme.primary }
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("⏱", fontSize = 18.sp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "%02d:%02d".format(remaining / 60, remaining % 60),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = timerColor
+                            )
+                            if (text.isNotBlank()) {
+                                Text(text, style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
+                            }
+                        }
+                        if (!isDone) {
+                            FilledTonalButton(
+                                onClick = { timerRunning[i] = !isRunning },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = timerColor,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            ) { Text(if (isRunning) "Pause" else "Start", style = MaterialTheme.typography.labelMedium) }
+                        }
+                        OutlinedButton(
+                            onClick = { timerRemaining[i] = totalSecs; timerRunning[i] = false },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) { Text("Reset", style = MaterialTheme.typography.labelMedium) }
+                    }
+                } else {
+                    stepCounter++
+                    val checked = checkedSteps.getOrElse(i) { false }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.clickable { checkedSteps[i] = !checked }
+                    ) {
+                        Box(
+                            modifier = Modifier.size(28.dp).clip(CircleShape).then(
+                                if (checked) Modifier.background(MaterialTheme.colorScheme.primary)
+                                else Modifier.background(Color.Transparent)
+                                    .border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "$stepCounter",
+                                color = if (checked) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.outlineVariant,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textDecoration = if (checked) TextDecoration.LineThrough else TextDecoration.None,
+                            color = if (checked) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -36,6 +36,13 @@ interface RecipeDao {
     @Query("DELETE FROM recipe_ingredients WHERE ingredientId = :ingredientId")
     suspend fun deleteRecipeIngredientsByIngredientId(ingredientId: String)
 
+    @Query("""
+        SELECT DISTINCT ri.recipeId FROM recipe_ingredients ri
+        INNER JOIN ingredients i ON ri.ingredientId = i.id
+        WHERE i.name LIKE '%' || :query || '%'
+    """)
+    fun getRecipeIdsContainingIngredient(query: String): kotlinx.coroutines.flow.Flow<List<String>>
+
     @Delete
     suspend fun deleteRecipe(recipe: RecipeEntity)
 }

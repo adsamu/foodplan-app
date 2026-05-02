@@ -35,16 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adasa.foodplan.domain.model.Recipe
 import com.adasa.foodplan.domain.model.RecipeType
 
-private val ChipActiveBackground = Color(0xFFE8DEF8)
-private val ChipActiveText = Color(0xFF21005D)
-private val CardBackground = Color(0xFFF3EDF7)
-private val MealBadgeBackground = Color(0xFFEADDFF)
-private val MealBadgeText = Color(0xFF21005D)
-private val ComponentBadgeBackground = Color(0xFFFFD8E4)
-private val ComponentBadgeText = Color(0xFF31111D)
-private val SearchBarBackground = Color(0xFFECE6F0)
-private val SectionLabelColor = Color(0xFF79747E)
-private val IconBoxBackground = Color(0xFFEADDFF)
+// Colors are now pulled from MaterialTheme.colorScheme at the call site — see usages below.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,8 +76,8 @@ fun RecipeListScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 shape = RoundedCornerShape(50),
                 colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = SearchBarBackground,
-                    focusedContainerColor = SearchBarBackground,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                     unfocusedBorderColor = Color.Transparent,
                     focusedBorderColor = Color.Transparent
                 ),
@@ -114,13 +105,13 @@ fun RecipeListScreen(
                         label = {
                             Text(
                                 label,
-                                color = if (active) ChipActiveText else Color.Unspecified,
+                                color = if (active) MaterialTheme.colorScheme.onSecondaryContainer else Color.Unspecified,
                                 style = MaterialTheme.typography.labelMedium
                             )
                         },
                         shape = RoundedCornerShape(8.dp),
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = ChipActiveBackground
+                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
                         )
                     )
                 }
@@ -187,7 +178,7 @@ private fun SectionHeader(title: String) {
         text = title.uppercase(),
         fontSize = 10.sp,
         fontWeight = FontWeight.SemiBold,
-        color = SectionLabelColor,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         letterSpacing = 0.8.sp,
         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
     )
@@ -199,7 +190,7 @@ private fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(
             modifier = Modifier.padding(10.dp),
@@ -211,14 +202,14 @@ private fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
                 modifier = Modifier
                     .size(44.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(IconBoxBackground),
+                    .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (recipe.type == RecipeType.COMPONENT)
                         Icons.Default.Blender else Icons.Default.Restaurant,
                     contentDescription = null,
-                    tint = MealBadgeText,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -237,15 +228,15 @@ private fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
                         if (recipe.type == RecipeType.COMPONENT) {
                             RecipeBadge(
                                 label = recipe.componentCategory?.displayName ?: "Component",
-                                background = ComponentBadgeBackground,
-                                textColor = ComponentBadgeText
+                                background = MaterialTheme.colorScheme.tertiaryContainer,
+                                textColor = MaterialTheme.colorScheme.onTertiaryContainer
                             )
                         }
                         recipe.mealCategories.forEach { cat ->
                             RecipeBadge(
                                 label = cat.displayName,
-                                background = MealBadgeBackground,
-                                textColor = MealBadgeText
+                                background = MaterialTheme.colorScheme.primaryContainer,
+                                textColor = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                     }
@@ -303,8 +294,8 @@ private fun ExpandableFab(
         FloatingActionButton(
             onClick = onToggle,
             shape = RoundedCornerShape(14.dp),
-            containerColor = IconBoxBackground,
-            contentColor = ChipActiveText
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ) {
             Icon(
                 imageVector = if (expanded) Icons.Default.Close else Icons.Default.Add,

@@ -119,20 +119,27 @@ class ShoppingViewModel @Inject constructor(
     // ── Period change — may show conflict dialog ───────────────────────────────
 
     fun requestPeriodChange(newStart: LocalDate, newEnd: LocalDate) {
+        val currentSuccess = _uiState.value as? ShoppingUiState.Success
+
         if (adjustments.isEmpty()) {
+            // No adjustments — regenerate directly
             loadShoppingList(newStart, newEnd)
             return
         }
+
+        // Adjustments exist — always ask the user what to do
         viewModelScope.launch {
+            _uiState.value = ShoppingUiState.Loading
             try {
                 val newList  = getShoppingListUseCase(newStart, newEnd)
                 val allItems = newList.categories.flatMap { it.items }
 
+                // Build a conflict entry for every current adjustment so the
+                // dialog can show what would change (newWithDelta = new calculated + delta)
                 val conflicts = adjustments.values.mapNotNull { adj ->
-                    val newItem = allItems.find { it.ingredientId == adj.ingredientId }
-                        ?: return@mapNotNull null
-                    val newCalc = newItem.totalGrams
-                    if (newCalc == adj.calculatedAmount) return@mapNotNull null
+                    val newItem    = allItems.find { it.ingredientId == adj.ingredientId }
+                        ?: return@mapNotNull null   // item gone from new list — drop silently
+                    val newCalc    = newItem.totalGrams
                     AdjustmentConflict(
                         ingredientId  = adj.ingredientId,
                         name          = newItem.name,
@@ -143,8 +150,12 @@ class ShoppingViewModel @Inject constructor(
                     )
                 }
 
+                // Restore the list so it's visible behind the dialog
+                if (currentSuccess != null) _uiState.value = currentSuccess
+
                 if (conflicts.isEmpty()) {
-                    applyNewListKeepingAdjustments(newList, newStart, newEnd)
+                    // All adjusted items disappeared from the new list — just apply
+                    applyNewList(newList, newStart, newEnd)
                 } else {
                     pendingRegeneration.value = PendingRegeneration(newStart, newEnd, conflicts)
                 }
@@ -224,6 +235,22 @@ class ShoppingViewModel @Inject constructor(
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun applyNewList(newList: ShoppingList, newStart: LocalDate, newEnd: LocalDate) {
+        currentStart = newStart
+        currentEnd   = newEnd
+        _uiState.value = if (newList.totalItems == 0) {
+            ShoppingUiState.Empty(newStart, newEnd)
+        } else {
+            ShoppingUiState.Success(
+                shoppingList   = newList,
+                checkedItems   = checkedSet.toSet(),
+                checkedOrder   = checkedList.toList(),
+                adjustments    = adjustments.toMap(),
+                expandedItemId = null,
+            )
+        }
+    }
 
     private fun applyNewListKeepingAdjustments(
         newList:  ShoppingList,

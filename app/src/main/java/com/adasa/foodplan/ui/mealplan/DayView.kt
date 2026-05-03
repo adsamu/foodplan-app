@@ -2,9 +2,10 @@ package com.adasa.foodplan.ui.mealplan
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
@@ -12,7 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,18 +29,33 @@ import kotlinx.datetime.LocalDate
 
 @Composable
 fun DayView(
-    state: DayUiState?,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onMealClick: (String) -> Unit
+    state:         DayUiState?,
+    onPrevious:    () -> Unit,
+    onNext:        () -> Unit,
+    onMealClick:   (String) -> Unit,
+    checkedMeals:  Set<Int> = emptySet(),
+    onMealChecked: (Int) -> Unit = {}
 ) {
     if (state == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
 
+    var swipeDrag by remember { mutableStateOf(0f) }
+
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (swipeDrag < -60) onNext()
+                        else if (swipeDrag > 60) onPrevious()
+                        swipeDrag = 0f
+                    },
+                    onHorizontalDrag = { _, amount -> swipeDrag += amount }
+                )
+            },
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -83,8 +99,15 @@ fun DayView(
                 }
             }
         } else {
-            items(state.meals) { slot ->
-                MealCard(slot, onClick = { onMealClick(slot.recipeId) })
+            items(state.meals.size) { index ->
+                val slot    = state.meals[index]
+                val checked = index in checkedMeals
+                MealCard(
+                    slot      = slot,
+                    checked   = checked,
+                    onCheck   = { onMealChecked(index) },
+                    onClick   = { onMealClick(slot.recipeId) }
+                )
             }
         }
 
@@ -98,7 +121,7 @@ fun DayView(
 }
 
 @Composable
-private fun MealCard(slot: MealSlotUi, onClick: () -> Unit) {
+private fun MealCard(slot: MealSlotUi, checked: Boolean, onCheck: () -> Unit, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -108,6 +131,17 @@ private fun MealCard(slot: MealSlotUi, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // Tap the circle to check without navigating to recipe
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                .clickable { onCheck() },
+            contentAlignment = Alignment.Center
+        ) {
+            if (checked) Text("✓", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+        }
         Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center) {
             Icon(Icons.Default.Restaurant, contentDescription = null,
@@ -117,7 +151,9 @@ private fun MealCard(slot: MealSlotUi, onClick: () -> Unit) {
             Text(slot.type.displayName.uppercase(), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 letterSpacing = 0.6.sp)
             Text(slot.recipeName, fontSize = 14.sp, fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = if (checked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                textDecoration = if (checked) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
                 modifier = Modifier.padding(top = 1.dp))
             Text("${slot.protein.toInt()}g P · ${slot.fat.toInt()}g F · ${slot.carbs.toInt()}g C",
                 fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))

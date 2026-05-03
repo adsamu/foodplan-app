@@ -1,18 +1,22 @@
 package com.adasa.foodplan.ui.mealplan
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,6 +27,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun MealPlanScreen(
     onNavigateToRecipeDetail: (String) -> Unit = {},
+    onNavigateToSettings:     () -> Unit       = {},
+    onNavigateToOptimize:     () -> Unit       = {},
     viewModel: MealPlanViewModel = hiltViewModel()
 ) {
     val selectedView  by viewModel.selectedView.collectAsStateWithLifecycle()
@@ -30,20 +36,8 @@ fun MealPlanScreen(
     val dayState      by viewModel.dayUiState.collectAsStateWithLifecycle()
     val weekState     by viewModel.weekUiState.collectAsStateWithLifecycle()
     val monthState    by viewModel.monthUiState.collectAsStateWithLifecycle()
+    val checkedMeals  by viewModel.checkedMeals.collectAsStateWithLifecycle()
 
-    val primaryLabel = when (selectedView) {
-        PlanView.DAY   -> dayState?.nutrition?.kcal?.toInt()?.let { "$it kcal" } ?: "— kcal"
-        PlanView.WEEK  -> weekState?.avgKcal?.toInt()?.let { "~$it kcal/day" } ?: "—"
-        PlanView.MONTH -> monthState?.avgKcal?.toInt()?.let { "~$it kcal/day" } ?: "—"
-    }
-    val subtitleLabel = when (selectedView) {
-        PlanView.DAY   -> dayState?.let { d ->
-            val mon = d.date.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
-            "${d.date.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }}, ${d.date.dayOfMonth} $mon · ${d.dayType.name.lowercase().replaceFirstChar { it.uppercase() }}"
-        } ?: ""
-        PlanView.WEEK  -> weekState?.let { "Week ${it.weekNumber} · ${shortDate(it.startDate)}–${shortDate(it.endDate)}" } ?: ""
-        PlanView.MONTH -> monthState?.let { "${it.month.name.lowercase().replaceFirstChar { c -> c.uppercase() }} ${it.year} · ${it.days.size} days" } ?: ""
-    }
     val protein = when (selectedView) {
         PlanView.DAY   -> dayState?.nutrition?.protein ?: 0.0
         PlanView.WEEK  -> weekState?.avgProtein ?: 0.0
@@ -59,29 +53,88 @@ fun MealPlanScreen(
         PlanView.WEEK  -> weekState?.avgCarbs ?: 0.0
         PlanView.MONTH -> monthState?.avgCarbs ?: 0.0
     }
+    val kcalActual = when (selectedView) {
+        PlanView.DAY   -> dayState?.nutrition?.kcal ?: 0.0
+        PlanView.WEEK  -> weekState?.avgKcal ?: 0.0
+        PlanView.MONTH -> monthState?.avgKcal ?: 0.0
+    }
+    val kcalTarget = dayState?.kcalTarget ?: 1350
+
+    val primaryLabel = when (selectedView) {
+        PlanView.DAY   -> dayState?.nutrition?.kcal?.toInt()?.let { "$it kcal" } ?: "— kcal"
+        PlanView.WEEK  -> weekState?.avgKcal?.toInt()?.let { "~$it kcal/day" } ?: "—"
+        PlanView.MONTH -> monthState?.avgKcal?.toInt()?.let { "~$it kcal/day" } ?: "—"
+    }
+    val subtitleLabel = when (selectedView) {
+        PlanView.DAY   -> dayState?.let { d ->
+            val mon = d.date.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+            "${d.date.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }}, ${d.date.dayOfMonth} $mon · ${d.dayType.name.lowercase().replaceFirstChar { it.uppercase() }}"
+        } ?: ""
+        PlanView.WEEK  -> weekState?.let { "Week ${it.weekNumber} · ${shortDate(it.startDate)}–${shortDate(it.endDate)}" } ?: ""
+        PlanView.MONTH -> monthState?.let { "${it.month.name.lowercase().replaceFirstChar { c -> c.uppercase() }} ${it.year} · ${it.days.size} days" } ?: ""
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Meal Plan", fontWeight = FontWeight.Medium) },
-            actions = { IconButton(onClick = {}) { Icon(Icons.Default.Settings, contentDescription = "Settings") } }
+            actions = {
+                IconButton(onClick = onNavigateToOptimize) {
+                    Icon(Icons.Default.Autorenew, contentDescription = "Optimize")
+                }
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings")
+                }
+            }
         )
-        ViewToggle(selected = selectedView, onSelect = viewModel::onViewChange,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
+        ViewToggle(
+            selected = selectedView, onSelect = viewModel::onViewChange,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+        )
+        // Swipe left/right on the stats card to cycle views
+        val views = PlanView.entries
         StatsCard(
-            view = selectedView, expanded = statsExpanded, onToggle = viewModel::onToggleStats,
-            primaryLabel = primaryLabel, subtitleLabel = subtitleLabel,
-            protein = protein, fat = fat, carbs = carbs,
-            kcalTarget = dayState?.kcalTarget ?: 1350,
-            daysUntilShopping = dayState?.daysUntilShopping ?: weekState?.daysUntilShopping,
-            proteinPowderDaysLeft = null,
-            highCalDays = weekState?.highCalDays, weekTotalKcal = weekState?.weekTotalKcal,
-            shoppingDaysCount = monthState?.shoppingDaysCount, highCalDaysCount = monthState?.highCalDaysCount,
-            monthTotalKcal = monthState?.monthTotalKcal,
-            modifier = Modifier.padding(horizontal = 14.dp).padding(bottom = 6.dp)
+            view          = selectedView,
+            expanded      = statsExpanded,
+            onToggle      = viewModel::onToggleStats,
+            primaryLabel  = primaryLabel,
+            subtitleLabel = subtitleLabel,
+            protein       = protein, fat = fat, carbs = carbs,
+            kcalActual    = kcalActual, kcalTarget = kcalTarget,
+            proteinPowderDaysLeft = weekState?.proteinPowderDaysLeft ?: monthState?.proteinPowderDaysLeft,
+            fullDays  = when (selectedView) { PlanView.DAY -> null; PlanView.WEEK -> weekState?.fullDays; PlanView.MONTH -> monthState?.fullDays },
+            halfDays  = when (selectedView) { PlanView.DAY -> null; PlanView.WEEK -> weekState?.halfDays; PlanView.MONTH -> monthState?.halfDays },
+            avgKcalPct = when (selectedView) { PlanView.DAY -> null; PlanView.WEEK -> weekState?.avgKcalPct; PlanView.MONTH -> monthState?.avgKcalPct },
+            modifier = Modifier
+                .padding(horizontal = 14.dp)
+                .padding(bottom = 6.dp)
+                .pointerInput(selectedView) {
+                    var drag = 0f
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            val idx = views.indexOf(selectedView)
+                            if (drag < -60 && idx < views.lastIndex) viewModel.onViewChange(views[idx + 1])
+                            else if (drag > 60 && idx > 0) viewModel.onViewChange(views[idx - 1])
+                            drag = 0f
+                        },
+                        onHorizontalDrag = { _, amount -> drag += amount }
+                    )
+                }
         )
         when (selectedView) {
-            PlanView.DAY   -> DayView(dayState, viewModel::onNavigatePrevious, viewModel::onNavigateNext, onNavigateToRecipeDetail)
-            PlanView.WEEK  -> WeekView(weekState, viewModel::onNavigatePrevious, viewModel::onNavigateNext)
+            PlanView.DAY -> DayView(
+                state         = dayState,
+                onPrevious    = viewModel::onNavigatePrevious,
+                onNext        = viewModel::onNavigateNext,
+                onMealClick   = onNavigateToRecipeDetail,
+                checkedMeals  = checkedMeals[dayState?.date?.toString()] ?: emptySet(),
+                onMealChecked = { idx -> dayState?.date?.let { viewModel.onMealChecked(it, idx) } }
+            )
+            PlanView.WEEK  -> WeekView(
+                state          = weekState,
+                onPrevious     = viewModel::onNavigatePrevious,
+                onNext         = viewModel::onNavigateNext,
+                onRecipeClick  = onNavigateToRecipeDetail
+            )
             PlanView.MONTH -> MonthView(monthState, viewModel::onNavigatePrevious, viewModel::onNavigateNext)
         }
     }
@@ -93,13 +146,17 @@ private fun ViewToggle(selected: PlanView, onSelect: (PlanView) -> Unit, modifie
         .background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp)) {
         PlanView.entries.forEach { view ->
             val active = view == selected
-            Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
-                .background(if (active) MaterialTheme.colorScheme.primary else Color.Transparent)
-                .clickable { onSelect(view) }.padding(vertical = 6.dp),
-                contentAlignment = Alignment.Center) {
-                Text(view.name.lowercase().replaceFirstChar { it.uppercase() },
+            Box(
+                modifier = Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
+                    .background(if (active) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .clickable { onSelect(view) }.padding(vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    view.name.lowercase().replaceFirstChar { it.uppercase() },
                     fontSize = 12.sp, fontWeight = FontWeight.Medium,
-                    color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

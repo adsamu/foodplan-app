@@ -9,8 +9,7 @@ import com.adasa.foodplan.domain.model.MealSlot
 import com.adasa.foodplan.domain.model.RecipeNutrition
 import com.adasa.foodplan.domain.model.computeNutrition
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
-import kotlinx.datetime.*
+import kotlinx.coroutines.flow.*import kotlinx.datetime.*
 import javax.inject.Inject
 
 @HiltViewModel
@@ -26,19 +25,32 @@ class MealPlanViewModel @Inject constructor(
     val selectedDate  = MutableStateFlow(today)
     val statsExpanded = MutableStateFlow(false)
 
+    // Map<dateString, Set<mealIndex>> — in-memory meal check state
+    private val _checkedMeals = MutableStateFlow<Map<String, Set<Int>>>(emptyMap())
+    val checkedMeals: StateFlow<Map<String, Set<Int>>> = _checkedMeals
+
+    fun onMealChecked(date: LocalDate, mealIndex: Int) {
+        _checkedMeals.update { map ->
+            val key     = date.toString()
+            val current = map[key] ?: emptySet()
+            val updated = if (mealIndex in current) current - mealIndex else current + mealIndex
+            map + (key to updated)
+        }
+    }
+
     private val nutritionCache = mutableMapOf<String, RecipeNutrition>()
 
-    val dayUiState: StateFlow<DayUiState?> = selectedDate
-        .flatMapLatest { date -> flow { emit(buildDayState(date)) } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val dayUiState: StateFlow<DayUiState?> = combine(selectedDate, _checkedMeals) { date, checked ->
+        buildDayState(date, checked)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val weekUiState: StateFlow<WeekUiState?> = selectedDate
-        .flatMapLatest { date -> flow { emit(buildWeekState(date)) } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val weekUiState: StateFlow<WeekUiState?> = combine(selectedDate, _checkedMeals) { date, checked ->
+        buildWeekState(date, checked)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val monthUiState: StateFlow<MonthUiState?> = selectedDate
-        .flatMapLatest { date -> flow { emit(buildMonthState(date)) } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val monthUiState: StateFlow<MonthUiState?> = combine(selectedDate, _checkedMeals) { date, checked ->
+        buildMonthState(date, checked)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun onViewChange(view: PlanView) { selectedView.value = view }
     fun onToggleStats()              { statsExpanded.update { !it } }
@@ -61,7 +73,7 @@ class MealPlanViewModel @Inject constructor(
 
     // ─── Builders ────────────────────────────────────────────────────────────
 
-    private suspend fun buildDayState(date: LocalDate): DayUiState {
+    private suspend fun buildDayState(date: LocalDate, checked: Map<String, Set<Int>>): DayUiState {
         val plan  = mealPlanRepository.getDayPlanByDate(date)
         val slots = plan?.meals?.map { buildSlotUi(it) } ?: emptyList()
         val nutrition = dayNutritionOf(slots)
@@ -77,22 +89,30 @@ class MealPlanViewModel @Inject constructor(
         )
     }
 
-    private suspend fun buildWeekState(date: LocalDate): WeekUiState {
+    private suspend fun buildWeekState(date: LocalDate, checked: Map<String, Set<Int>>): WeekUiState {
         val monday = weekStart(date)
         val sunday = monday.plus(6, DateTimeUnit.DAY)
         val plans  = mealPlanRepository.getDayPlansForRange(monday, sunday)
         var totP = 0.0; var totF = 0.0; var totC = 0.0; var totK = 0.0; var dayCount = 0
+        var fullDays = 0; var halfDays = 0; var kcalPctSum = 0.0; var kcalPctCount = 0
         val days = (0..6).map { offset ->
             val d     = monday.plus(offset, DateTimeUnit.DAY)
             val plan  = plans[d]
             val slots = plan?.meals?.map { buildSlotUi(it) } ?: emptyList()
             val kcal  = slots.sumOf { it.kcal }
+            val checkedSet = checked[d.toString()] ?: emptySet()
+            val checkedCount = checkedSet.size
             if (slots.isNotEmpty()) {
                 totK += kcal; totP += slots.sumOf { it.protein }
                 totF += slots.sumOf { it.fat }; totC += slots.sumOf { it.carbs }; dayCount++
+                val pct = checkedCount.toDouble() / slots.size
+                if (pct >= 1.0) fullDays++ else if (pct >= 0.5) halfDays++
+                val target = plan?.goal?.kcalTarget ?: defaultKcal(d)
+                if (target > 0) { kcalPctSum += (kcal / target) * 100; kcalPctCount++ }
             }
             val target = plan?.goal?.kcalTarget ?: defaultKcal(d)
-            WeekDayUi(d, d == today, target > 1_400, isShoppingDay(d), kcal, target, slots.map { it.recipeName })
+            WeekDayUi(d, d == today, target > 1_400, isShoppingDay(d), kcal, target,
+                slots.map { it.recipeName }, slots, checkedCount)
         }
         val n = dayCount.coerceAtLeast(1)
         return WeekUiState(
@@ -101,26 +121,35 @@ class MealPlanViewModel @Inject constructor(
             avgKcal     = totK / n, avgProtein = totP / n, avgFat = totF / n, avgCarbs = totC / n,
             weekTotalKcal = totK, highCalDays = days.count { it.isHighCal },
             daysUntilShopping = daysUntilShopping(date).takeIf { it > 0 },
-            proteinPowderDaysLeft = null
+            proteinPowderDaysLeft = null,
+            fullDays = fullDays, halfDays = halfDays,
+            avgKcalPct = if (kcalPctCount > 0) (kcalPctSum / kcalPctCount).toInt() else 0,
         )
     }
 
-    private suspend fun buildMonthState(date: LocalDate): MonthUiState {
+    private suspend fun buildMonthState(date: LocalDate, checked: Map<String, Set<Int>>): MonthUiState {
         val first = LocalDate(date.year, date.month, 1)
         val last  = first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
         val plans = mealPlanRepository.getDayPlansForRange(first, last)
         var totK = 0.0; var totP = 0.0; var totF = 0.0; var totC = 0.0; var dayCount = 0
+        var fullDays = 0; var halfDays = 0; var kcalPctSum = 0.0; var kcalPctCount = 0
         val days = buildList {
             var d = first
             while (d <= last) {
                 val plan  = plans[d]
                 val slots = plan?.meals?.map { buildSlotUi(it) } ?: emptyList()
+                val checkedSet = checked[d.toString()] ?: emptySet()
+                val checkedCount = checkedSet.size
                 if (slots.isNotEmpty()) {
                     totK += slots.sumOf { it.kcal }; totP += slots.sumOf { it.protein }
                     totF += slots.sumOf { it.fat }; totC += slots.sumOf { it.carbs }; dayCount++
+                    val pct = checkedCount.toDouble() / slots.size
+                    if (pct >= 1.0) fullDays++ else if (pct >= 0.5) halfDays++
+                    val target = plan?.goal?.kcalTarget ?: defaultKcal(d)
+                    if (target > 0) { kcalPctSum += (slots.sumOf { it.kcal } / target) * 100; kcalPctCount++ }
                 }
                 add(MonthDayUi(d, d == today, (plan?.goal?.kcalTarget ?: defaultKcal(d)) > 1_400,
-                    isShoppingDay(d), plan != null))
+                    isShoppingDay(d), plan != null, checkedCount, slots.size))
                 d = d.plus(1, DateTimeUnit.DAY)
             }
         }
@@ -129,7 +158,9 @@ class MealPlanViewModel @Inject constructor(
             month = date.month, year = date.year, days = days,
             avgKcal = totK / n, avgProtein = totP / n, avgFat = totF / n, avgCarbs = totC / n,
             monthTotalKcal = totK, shoppingDaysCount = days.count { it.isShoppingDay },
-            highCalDaysCount = days.count { it.isHighCal }, proteinPowderDaysLeft = null
+            highCalDaysCount = days.count { it.isHighCal }, proteinPowderDaysLeft = null,
+            fullDays = fullDays, halfDays = halfDays,
+            avgKcalPct = if (kcalPctCount > 0) (kcalPctSum / kcalPctCount).toInt() else 0,
         )
     }
 

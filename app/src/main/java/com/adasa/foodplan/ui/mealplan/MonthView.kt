@@ -2,6 +2,7 @@ package com.adasa.foodplan.ui.mealplan
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,15 +14,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.datetime.LocalDate
 
-// Semantic accent dots
-private val AmberDot   = Color(0xFFE8A000)
-private val GreenDot   = Color(0xFF1D9E75)
+private val GreenFull  = Color(0xFF1D9E75)
+private val AmberHalf  = Color(0xFFE8A000)
 
 @Composable
 fun MonthView(
@@ -35,14 +36,35 @@ fun MonthView(
     }
 
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    var swipeDrag    by remember { mutableStateOf(0f) }
+
+    // Longest streak of fully completed days
+    val longestStreak = remember(state.days) {
+        var max = 0; var cur = 0
+        state.days.forEach { d ->
+            if (d.totalMeals > 0 && d.checkedCount >= d.totalMeals) { cur++; if (cur > max) max = cur }
+            else cur = 0
+        }
+        max
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (swipeDrag < -60) onNext()
+                        else if (swipeDrag > 60) onPrevious()
+                        swipeDrag = 0f
+                    },
+                    onHorizontalDrag = { _, amount -> swipeDrag += amount }
+                )
+            }
             .padding(horizontal = 14.dp, vertical = 4.dp)
     ) {
-        // Month navigator
+        // Navigator
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -61,33 +83,36 @@ fun MonthView(
         }
 
         // Day-of-week headers
-        val dowLabels = listOf("M", "T", "W", "T", "F", "S", "S")
         Row(modifier = Modifier.fillMaxWidth()) {
-            dowLabels.forEach { label ->
+            listOf("M","T","W","T","F","S","S").forEach { label ->
                 Text(label, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
-                    fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Spacer(Modifier.height(4.dp))
 
-        // Calendar grid — leading blanks = dayOfWeek.ordinal (Mon=0)
-        val firstDay = state.days.first().date
-        val leadingBlanks = firstDay.dayOfWeek.ordinal  // 0=Mon, 6=Sun
+        // Calendar grid
+        val firstDay     = state.days.first().date
+        val leadingBlanks = firstDay.dayOfWeek.ordinal
         val cells: List<MonthDayUi?> = List(leadingBlanks) { null } + state.days
-
-        // Pad to full rows of 7
-        val paddedCells = cells + List((7 - cells.size % 7) % 7) { null }
+        val paddedCells  = cells + List((7 - cells.size % 7) % 7) { null }
 
         paddedCells.chunked(7).forEach { week ->
             Row(modifier = Modifier.fillMaxWidth()) {
                 week.forEach { day ->
                     Box(modifier = Modifier.weight(1f).aspectRatio(1f).padding(2.dp)) {
-                        if (day == null) return@Box  // empty cell
+                        if (day == null) return@Box
 
-                        val isSelected = selectedDate == day.date
+                        val isSelected  = selectedDate == day.date
+                        val isFull      = day.totalMeals > 0 && day.checkedCount >= day.totalMeals
+                        val isHalf      = day.totalMeals > 0 && day.checkedCount > 0 && !isFull
+
                         val bgColor = when {
                             day.isToday  -> MaterialTheme.colorScheme.primary
                             isSelected   -> MaterialTheme.colorScheme.primaryContainer
+                            isFull       -> GreenFull.copy(alpha = 0.25f)
+                            isHalf       -> AmberHalf.copy(alpha = 0.25f)
                             else         -> MaterialTheme.colorScheme.surfaceContainerLow
                         }
                         val textColor = when {
@@ -95,11 +120,12 @@ fun MonthView(
                             isSelected   -> MaterialTheme.colorScheme.onPrimaryContainer
                             else         -> MaterialTheme.colorScheme.onSurface
                         }
-                        val dotColor = when {
-                            day.isToday      -> MaterialTheme.colorScheme.onPrimary
-                            day.isHighCal    -> AmberDot
-                            day.isShoppingDay -> GreenDot
-                            else             -> null
+                        // Small dot for fully/half completed (when today is not overriding)
+                        val dotColor: Color? = when {
+                            day.isToday -> null
+                            isFull      -> GreenFull
+                            isHalf      -> AmberHalf
+                            else        -> null
                         }
 
                         Box(
@@ -107,21 +133,16 @@ fun MonthView(
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(bgColor)
-                                .clickable {
-                                    selectedDate = if (selectedDate == day.date) null else day.date
-                                },
+                                .clickable { selectedDate = if (selectedDate == day.date) null else day.date },
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    "${day.date.dayOfMonth}",
-                                    fontSize = 11.sp,
-                                    fontWeight = if (day.isToday || isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = textColor,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                            // Dot indicator at bottom
+                            Text(
+                                "${day.date.dayOfMonth}",
+                                fontSize = 11.sp,
+                                fontWeight = if (day.isToday || isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = textColor,
+                                textAlign = TextAlign.Center
+                            )
                             if (dotColor != null) {
                                 Box(
                                     modifier = Modifier
@@ -138,16 +159,60 @@ fun MonthView(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
 
         // Legend
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            LegendItem(AmberDot,  "High calorie")
-            LegendItem(GreenDot,  "Shopping day")
+            LegendItem(GreenFull,  "All meals done")
+            LegendItem(AmberHalf,  "Partially done")
             LegendItem(MaterialTheme.colorScheme.primary, "Today")
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
+
+        // Streak card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape    = RoundedCornerShape(14.dp),
+            colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text("🔥", fontSize = 28.sp)
+                Column {
+                    Text(
+                        "$longestStreak",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        "day${if (longestStreak != 1) "s" else ""} longest streak",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${state.fullDays}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        "full days this month",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
     }
 }
 

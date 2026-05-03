@@ -1,18 +1,22 @@
 package com.adasa.foodplan.ui.mealplan
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -20,29 +24,37 @@ import androidx.compose.ui.unit.sp
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 
-// Semantic accent colours
-private val AmberAcc    = Color(0xFFE8A000)
-private val GreenAcc    = Color(0xFF1D9E75)
-private val HCalBg      = Color(0xFFFFF0C2); private val HCalTxt = Color(0xFF7D4E00)
-private val ShopBg      = Color(0xFFD8F5E4); private val ShopTxt = Color(0xFF0A3D22)
-
 @Composable
 fun WeekView(
     state: WeekUiState?,
     onPrevious: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    onRecipeClick: (String) -> Unit = {}
 ) {
     if (state == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
 
+    var expandedDate by remember { mutableStateOf<LocalDate?>(null) }
+    var swipeDrag    by remember { mutableStateOf(0f) }
+
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (swipeDrag < -60) onNext()
+                        else if (swipeDrag > 60) onPrevious()
+                        swipeDrag = 0f
+                    },
+                    onHorizontalDrag = { _, amount -> swipeDrag += amount }
+                )
+            },
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Week navigator
         item {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -62,81 +74,166 @@ fun WeekView(
             }
         }
 
-        items(state.days) { day -> WeekDayRow(day) }
+        items(state.days) { day ->
+            val isExpanded = expandedDate == day.date
+            WeekDayRow(
+                day           = day,
+                isExpanded    = isExpanded,
+                onToggle      = { expandedDate = if (isExpanded) null else day.date },
+                onRecipeClick = onRecipeClick
+            )
+        }
 
         item { Spacer(Modifier.height(8.dp)) }
     }
 }
 
 @Composable
-private fun WeekDayRow(day: WeekDayUi) {
-    val borderModifier = when {
-        day.isToday      -> Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
-        day.isHighCal    -> Modifier.border(BorderStroke(3.dp, AmberAcc),
-            shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp))
-        day.isShoppingDay -> Modifier.border(BorderStroke(3.dp, GreenAcc),
-            shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp))
-        else             -> Modifier
-    }
+private fun WeekDayRow(day: WeekDayUi, isExpanded: Boolean, onToggle: () -> Unit, onRecipeClick: (String) -> Unit = {}) {
+    val todayBorder = if (day.isToday)
+        Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+    else Modifier
 
-    val barColor = when {
-        day.isHighCal    -> AmberAcc
-        day.isShoppingDay -> GreenAcc
-        else             -> MaterialTheme.colorScheme.primary
-    }
+    val barColor = if (isExpanded) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.primary
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .then(borderModifier)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .then(todayBorder)
+            .clickable { onToggle() }
     ) {
-        // Top row: date + badges + kcal
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        // ── Collapsed row ─────────────────────────────────────────────────────
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            val dateLabel = buildString {
-                append(shortDayName(day.date))
-                append(" ${day.date.dayOfMonth}")
-                if (day.isToday) append(" · Today")
-            }
-            Text(dateLabel, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val dateLabel = buildString {
+                    append(shortDayName(day.date))
+                    append(" ${day.date.dayOfMonth}")
+                    if (day.isToday) append(" · Today")
+                }
+                Text(dateLabel, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (day.isHighCal) Badge("High cal", HCalBg, HCalTxt)
-                if (day.isShoppingDay) Badge("Shopping", ShopBg, ShopTxt)
-                Text("${day.kcal.toInt()} kcal", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Compliance badge
+                    if (day.meals.isNotEmpty()) {
+                        val badgeBg = when {
+                            day.checkedCount >= day.meals.size -> MaterialTheme.colorScheme.tertiaryContainer
+                            day.checkedCount * 2 >= day.meals.size -> MaterialTheme.colorScheme.secondaryContainer
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                        val badgeText = if (day.checkedCount >= day.meals.size) "✓"
+                        else "${day.checkedCount}/${day.meals.size}"
+                        Box(
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(badgeBg)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(badgeText, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                    Text("${day.kcal.toInt()} kcal", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            // Meal name pills
+            if (day.mealNames.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    day.mealNames.take(3).forEach { name ->
+                        Box(
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(name, fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 90.dp))
+                        }
+                    }
+                }
+            }
+
+            // Kcal progress bar vs target
+            val fraction = if (day.kcalTarget > 0) (day.kcal / day.kcalTarget).toFloat().coerceIn(0f, 1f) else 0f
+            Box(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer)) {
+                Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(fraction)
+                    .clip(RoundedCornerShape(2.dp)).background(barColor))
             }
         }
 
-        // Meal name pills
-        if (day.mealNames.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                day.mealNames.take(3).forEach { name ->
-                    Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                        Text(name, fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(max = 90.dp))
+        // ── Expanded detail ───────────────────────────────────────────────────
+        AnimatedVisibility(visible = isExpanded, enter = expandVertically(), exit = shrinkVertically()) {
+            Column {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (day.meals.isEmpty()) {
+                        Text("No meals planned", fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        day.meals.forEach { meal ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onRecipeClick(meal.recipeId) }
+                                    .padding(vertical = 3.dp)
+                            ) {
+                                // Meal type chip
+                                Box(
+                                    modifier = Modifier.clip(RoundedCornerShape(5.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(meal.type.displayName, fontSize = 9.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(meal.recipeName, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f),
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${meal.kcal.toInt()} kcal", fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        // Daily macro summary
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            thickness = 0.5.dp
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val p = day.meals.sumOf { it.protein }.toInt()
+                            val f = day.meals.sumOf { it.fat }.toInt()
+                            val c = day.meals.sumOf { it.carbs }.toInt()
+                            MacroChip("P ${p}g", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                            MacroChip("F ${f}g", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+                            MacroChip("C ${c}g", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
                     }
                 }
             }
         }
-
-        // Kcal progress bar
-        val fraction = if (day.kcalTarget > 0) (day.kcal / day.kcalTarget).toFloat().coerceIn(0f, 1f) else 0f
-        Box(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.secondaryContainer)) {
-            Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(fraction).clip(RoundedCornerShape(2.dp)).background(barColor))
-        }
     }
 }
 
-@Composable private fun Badge(text: String, bg: Color, textColor: Color) {
-    Box(modifier = Modifier.clip(RoundedCornerShape(5.dp)).background(bg).padding(horizontal = 7.dp, vertical = 2.dp)) {
-        Text(text, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = textColor)
+@Composable
+private fun MacroChip(label: String, bg: androidx.compose.ui.graphics.Color, text: androidx.compose.ui.graphics.Color) {
+    Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 8.dp, vertical = 3.dp)) {
+        Text(label, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = text)
     }
 }
 

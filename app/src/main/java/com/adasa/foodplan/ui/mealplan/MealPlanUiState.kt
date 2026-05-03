@@ -46,7 +46,9 @@ data class WeekDayUi(
     val isShoppingDay: Boolean,
     val kcal: Double,
     val kcalTarget: Int,
-    val mealNames: List<String>
+    val mealNames: List<String>,
+    val meals: List<MealSlotUi> = emptyList(),
+    val checkedCount: Int = 0,
 )
 
 data class WeekUiState(
@@ -61,17 +63,20 @@ data class WeekUiState(
     val weekTotalKcal: Double,
     val highCalDays: Int,
     val daysUntilShopping: Int?,
-    val proteinPowderDaysLeft: Double?
+    val proteinPowderDaysLeft: Double?,
+    val fullDays: Int = 0,
+    val halfDays: Int = 0,
+    val avgKcalPct: Int = 0,
 )
-
-// ─── Month ────────────────────────────────────────────────────────────────────
 
 data class MonthDayUi(
     val date: LocalDate,
     val isToday: Boolean,
     val isHighCal: Boolean,
     val isShoppingDay: Boolean,
-    val isPlanned: Boolean
+    val isPlanned: Boolean,
+    val checkedCount: Int = 0,
+    val totalMeals: Int = 0,
 )
 
 data class MonthUiState(
@@ -85,5 +90,8 @@ data class MonthUiState(
     val monthTotalKcal: Double,
     val shoppingDaysCount: Int,
     val highCalDaysCount: Int,
-    val proteinPowderDaysLeft: Double?
+    val proteinPowderDaysLeft: Double?,
+    val fullDays: Int = 0,
+    val halfDays: Int = 0,
+    val avgKcalPct: Int = 0,
 )

@@ -102,6 +102,12 @@ fun AppNavGraph(
                 MealPlanScreen(
                     onNavigateToRecipeDetail = { recipeId ->
                         navController.navigate(Screen.RecipeDetail.createRoute(recipeId))
+                    },
+                    onNavigateToSettings = {
+                        navController.navigate(Screen.Settings.route)
+                    },
+                    onNavigateToOptimize = {
+                        // TODO: hook up optimizer screen when ready
                     }
                 )
             }

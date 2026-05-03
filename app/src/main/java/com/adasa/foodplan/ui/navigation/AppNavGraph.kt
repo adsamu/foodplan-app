@@ -106,9 +106,6 @@ fun AppNavGraph(
                     onNavigateToSettings = {
                         navController.navigate(Screen.Settings.route)
                     },
-                    onNavigateToOptimize = {
-                        // TODO: hook up optimizer screen when ready
-                    }
                 )
             }
             composable(Screen.Shopping.route) { ShoppingScreen() }

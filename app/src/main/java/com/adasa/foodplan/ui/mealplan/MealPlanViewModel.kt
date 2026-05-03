@@ -8,15 +8,26 @@ import com.adasa.foodplan.data.repository.RecipeRepository
 import com.adasa.foodplan.domain.model.MealSlot
 import com.adasa.foodplan.domain.model.RecipeNutrition
 import com.adasa.foodplan.domain.model.computeNutrition
+import com.adasa.foodplan.domain.usecase.GenerateMealPlanUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*import kotlinx.datetime.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import kotlinx.datetime.*
 import javax.inject.Inject
+
+sealed interface OptimizerState {
+    data object Idle    : OptimizerState
+    data object Running : OptimizerState
+    data class  Success(val planName: String) : OptimizerState
+    data class  Error(val message: String)    : OptimizerState
+}
 
 @HiltViewModel
 class MealPlanViewModel @Inject constructor(
-    private val mealPlanRepository: MealPlanRepository,
-    private val recipeRepository: RecipeRepository,
-    private val ingredientRepository: IngredientRepository
+    private val mealPlanRepository:  MealPlanRepository,
+    private val recipeRepository:    RecipeRepository,
+    private val ingredientRepository: IngredientRepository,
+    private val generateMealPlan:    GenerateMealPlanUseCase   // ← injected use case
 ) : ViewModel() {
 
     private val today: LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
@@ -24,6 +35,12 @@ class MealPlanViewModel @Inject constructor(
     val selectedView  = MutableStateFlow(PlanView.DAY)
     val selectedDate  = MutableStateFlow(today)
     val statsExpanded = MutableStateFlow(false)
+
+    // Bumped after every successful optimization so combine() re-queries the DB
+    private val _refreshTrigger = MutableStateFlow(0L)
+
+    private val _optimizerState = MutableStateFlow<OptimizerState>(OptimizerState.Idle)
+    val optimizerState: StateFlow<OptimizerState> = _optimizerState.asStateFlow()
 
     // Map<dateString, Set<mealIndex>> — in-memory meal check state
     private val _checkedMeals = MutableStateFlow<Map<String, Set<Int>>>(emptyMap())
@@ -40,17 +57,21 @@ class MealPlanViewModel @Inject constructor(
 
     private val nutritionCache = mutableMapOf<String, RecipeNutrition>()
 
-    val dayUiState: StateFlow<DayUiState?> = combine(selectedDate, _checkedMeals) { date, checked ->
-        buildDayState(date, checked)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    // _refreshTrigger is included so all views re-query after optimization
+    val dayUiState: StateFlow<DayUiState?> =
+        combine(selectedDate, _checkedMeals, _refreshTrigger) { date, checked, _ ->
+            buildDayState(date, checked)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val weekUiState: StateFlow<WeekUiState?> = combine(selectedDate, _checkedMeals) { date, checked ->
-        buildWeekState(date, checked)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val weekUiState: StateFlow<WeekUiState?> =
+        combine(selectedDate, _checkedMeals, _refreshTrigger) { date, checked, _ ->
+            buildWeekState(date, checked)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val monthUiState: StateFlow<MonthUiState?> = combine(selectedDate, _checkedMeals) { date, checked ->
-        buildMonthState(date, checked)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val monthUiState: StateFlow<MonthUiState?> =
+        combine(selectedDate, _checkedMeals, _refreshTrigger) { date, checked, _ ->
+            buildMonthState(date, checked)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun onViewChange(view: PlanView) { selectedView.value = view }
     fun onToggleStats()              { statsExpanded.update { !it } }
@@ -69,6 +90,35 @@ class MealPlanViewModel @Inject constructor(
             PlanView.WEEK  -> it.plus(7, DateTimeUnit.DAY)
             PlanView.MONTH -> it.plus(1, DateTimeUnit.MONTH)
         }
+    }
+
+    // ── Optimizer ─────────────────────────────────────────────────────────────
+
+    /**
+     * Generates a meal plan for the Monday of the currently selected week.
+     * The button is disabled while running so this can only be called once at a time.
+     */
+    fun generatePlan() {
+        if (_optimizerState.value is OptimizerState.Running) return
+        viewModelScope.launch {
+            _optimizerState.value = OptimizerState.Running
+            val startDate = weekStart(selectedDate.value)
+            val result    = generateMealPlan(startDate)
+            _optimizerState.value = result.fold(
+                onSuccess = { plan ->
+                    _refreshTrigger.update { it + 1 }   // re-query all views
+                    OptimizerState.Success(plan.name)
+                },
+                onFailure = { e ->
+                    OptimizerState.Error(e.message ?: "Could not generate plan")
+                }
+            )
+        }
+    }
+
+    /** Call from the UI after the snackbar has been shown so the button returns to normal. */
+    fun onOptimizerMessageConsumed() {
+        _optimizerState.value = OptimizerState.Idle
     }
 
     // ─── Builders ────────────────────────────────────────────────────────────
@@ -201,7 +251,7 @@ class MealPlanViewModel @Inject constructor(
     }
     private fun isShoppingDay(d: LocalDate) = d.dayOfWeek == DayOfWeek.SUNDAY
     private fun daysUntilShopping(from: LocalDate): Int {
-        val raw = (6 - from.dayOfWeek.ordinal + 7) % 7  // ordinal: MON=0 … SUN=6
+        val raw = (6 - from.dayOfWeek.ordinal + 7) % 7
         return if (raw == 0) 7 else raw
     }
     private fun weekStart(d: LocalDate) = d.minus(d.dayOfWeek.ordinal, DateTimeUnit.DAY)

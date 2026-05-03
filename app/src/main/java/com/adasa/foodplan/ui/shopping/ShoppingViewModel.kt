@@ -85,7 +85,27 @@ class ShoppingViewModel @Inject constructor(
     private var currentStart: LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
     private var currentEnd:   LocalDate = nextShoppingPeriodEnd()
 
+    /** null = all recipes selected (default) */
+    private val _selectedRecipeIds = MutableStateFlow<Set<String>?>(null)
+    val selectedRecipeIds: StateFlow<Set<String>?> = _selectedRecipeIds
+
     init { loadShoppingList(currentStart, currentEnd) }
+
+    fun toggleRecipeFilter(recipeId: String) {
+        val current = _uiState.value as? ShoppingUiState.Success ?: return
+        val allIds  = current.shoppingList.period.recipes.map { it.id }.toSet()
+        val prev    = _selectedRecipeIds.value ?: allIds
+        val next    = if (recipeId in prev) prev - recipeId else prev + recipeId
+        // If all selected, collapse back to null (= "all")
+        _selectedRecipeIds.value = if (next == allIds) null else next.ifEmpty { null }
+        // Reload with new filter
+        loadShoppingList(currentStart, currentEnd)
+    }
+
+    fun clearRecipeFilter() {
+        _selectedRecipeIds.value = null
+        loadShoppingList(currentStart, currentEnd)
+    }
 
     // ── Loading ───────────────────────────────────────────────────────────────
 
@@ -98,7 +118,7 @@ class ShoppingViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = ShoppingUiState.Loading
             try {
-                val list = getShoppingListUseCase(startDate, endDate)
+                val list = getShoppingListUseCase(startDate, endDate, _selectedRecipeIds.value)
                 _uiState.value = if (list.totalItems == 0) {
                     ShoppingUiState.Empty(startDate, endDate)
                 } else {

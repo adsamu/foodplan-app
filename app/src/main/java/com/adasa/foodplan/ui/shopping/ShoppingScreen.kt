@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,8 +58,9 @@ import kotlinx.datetime.todayIn
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShoppingScreen(viewModel: ShoppingViewModel = hiltViewModel()) {
-    val uiState      by viewModel.uiState.collectAsStateWithLifecycle()
-    val pendingRegen by viewModel.pendingRegeneration.collectAsStateWithLifecycle()
+    val uiState          by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingRegen     by viewModel.pendingRegeneration.collectAsStateWithLifecycle()
+    val selectedRecipes  by viewModel.selectedRecipeIds.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -82,12 +84,14 @@ fun ShoppingScreen(viewModel: ShoppingViewModel = hiltViewModel()) {
                     LazyColumn(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) {
                         item {
                             PeriodCard(
-                                startDate       = state.startDate,
-                                endDate         = state.endDate,
-                                recipeNames     = emptyList(),
-                                hasExpandedItem = false,
-                                onCloseEditor   = {},
-                                onPeriodChange  = { s, e -> viewModel.requestPeriodChange(s, e) }
+                                startDate         = state.startDate,
+                                endDate           = state.endDate,
+                                recipes           = emptyList(),
+                                selectedRecipeIds = null,
+                                onToggleRecipe    = {},
+                                hasExpandedItem   = false,
+                                onCloseEditor     = {},
+                                onPeriodChange    = { s, e -> viewModel.requestPeriodChange(s, e) }
                             )
                             Spacer(Modifier.height(24.dp))
                         }
@@ -109,10 +113,12 @@ fun ShoppingScreen(viewModel: ShoppingViewModel = hiltViewModel()) {
                 is ShoppingUiState.Success ->
                     ShoppingListContent(
                         state              = state,
+                        selectedRecipeIds  = selectedRecipes,
                         onToggleItem       = { viewModel.toggleItem(it) },
                         onExpandItem       = { viewModel.setExpandedItem(it) },
                         onCommitExpression = { id, expr -> viewModel.commitExpression(id, expr) },
-                        onPeriodChange     = { s, e -> viewModel.requestPeriodChange(s, e) }
+                        onPeriodChange     = { s, e -> viewModel.requestPeriodChange(s, e) },
+                        onToggleRecipe     = { viewModel.toggleRecipeFilter(it) }
                     )
 
                 is ShoppingUiState.Error ->
@@ -175,10 +181,12 @@ fun ShoppingScreen(viewModel: ShoppingViewModel = hiltViewModel()) {
 @Composable
 private fun ShoppingListContent(
     state:              ShoppingUiState.Success,
+    selectedRecipeIds:  Set<String>?,
     onToggleItem:       (String) -> Unit,
     onExpandItem:       (String?) -> Unit,
     onCommitExpression: (String, String) -> Double?,
     onPeriodChange:     (LocalDate, LocalDate) -> Unit,
+    onToggleRecipe:     (String) -> Unit,
 ) {
     // All items flat, keyed by ingredientId
     val allItems = remember(state.shoppingList) {
@@ -202,12 +210,14 @@ private fun ShoppingListContent(
     ) {
         item {
             PeriodCard(
-                startDate       = state.shoppingList.period.startDate,
-                endDate         = state.shoppingList.period.endDate,
-                recipeNames     = state.shoppingList.period.recipeNames,
-                hasExpandedItem = state.expandedItemId != null,
-                onCloseEditor   = { onExpandItem(null) },
-                onPeriodChange  = onPeriodChange
+                startDate         = state.shoppingList.period.startDate,
+                endDate           = state.shoppingList.period.endDate,
+                recipes           = state.shoppingList.period.recipes,
+                selectedRecipeIds = selectedRecipeIds,
+                onToggleRecipe    = onToggleRecipe,
+                hasExpandedItem   = state.expandedItemId != null,
+                onCloseEditor     = { onExpandItem(null) },
+                onPeriodChange    = onPeriodChange
             )
             Spacer(Modifier.height(8.dp))
         }
@@ -276,14 +286,17 @@ private fun ShoppingListContent(
 
 // ── Period card with inline calendar ─────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PeriodCard(
-    startDate:       LocalDate,
-    endDate:         LocalDate,
-    recipeNames:     List<String>,
-    hasExpandedItem: Boolean,
-    onCloseEditor:   () -> Unit,
-    onPeriodChange:  (LocalDate, LocalDate) -> Unit,
+    startDate:         LocalDate,
+    endDate:           LocalDate,
+    recipes:           List<com.adasa.foodplan.domain.model.SelectableRecipe>,
+    selectedRecipeIds: Set<String>?,   // null = all selected
+    onToggleRecipe:    (String) -> Unit,
+    hasExpandedItem:   Boolean,
+    onCloseEditor:     () -> Unit,
+    onPeriodChange:    (LocalDate, LocalDate) -> Unit,
 ) {
     var expanded      by remember { mutableStateOf(false) }
     var selectedStart by remember(startDate) { mutableStateOf(startDate) }
@@ -316,10 +329,13 @@ private fun PeriodCard(
                         fontWeight = FontWeight.Medium,
                         color      = MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                    if (recipeNames.isNotEmpty() && !expanded) {
-                        // Collapsed: truncated single-line preview of meals
+                    if (recipes.isNotEmpty() && !expanded) {
+                        val filterLabel = if (selectedRecipeIds == null)
+                            recipes.joinToString(" · ") { it.name }
+                        else
+                            "${selectedRecipeIds.size} of ${recipes.size} recipes"
                         Text(
-                            recipeNames.joinToString(" · "),
+                            filterLabel,
                             style    = MaterialTheme.typography.bodySmall,
                             color    = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.65f),
                             maxLines = 1,
@@ -356,21 +372,33 @@ private fun PeriodCard(
                 )
             }
 
-            // Expanded body — full meal list then calendar
+            // Expanded body — recipe filter chips then calendar
             AnimatedVisibility(visible = expanded, enter = expandVertically(), exit = shrinkVertically()) {
                 Column {
-                    if (recipeNames.isNotEmpty()) {
+                    if (recipes.isNotEmpty()) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                         Column(
-                            modifier            = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            recipeNames.forEach { name ->
-                                Text(
-                                    "· $name",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                )
+                            Text(
+                                "Filter by recipe",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement   = Arrangement.spacedBy(4.dp)
+                            ) {
+                                recipes.forEach { recipe ->
+                                    val isSelected = selectedRecipeIds == null || recipe.id in selectedRecipeIds
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick  = { onToggleRecipe(recipe.id) },
+                                        label    = { Text(recipe.name, style = MaterialTheme.typography.labelSmall) },
+                                        shape    = RoundedCornerShape(8.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -620,8 +648,17 @@ private fun ShoppingItemRow(
                         textDecoration = if (isChecked) TextDecoration.LineThrough else null,
                         color          = if (isChecked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                     )
-                    if (item.usedInRecipes.isNotEmpty()) {
-                        Text(item.usedInRecipes.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (item.contributions.isNotEmpty()) {
+                        // Per-recipe breakdown: "Curry (500g) · Pasta (300g)"
+                        Text(
+                            item.contributions.joinToString(" · ") { c ->
+                                "${c.recipeName} (${formatAmount(c.grams, item.unit)})"
+                            },
+                            style    = MaterialTheme.typography.bodySmall,
+                            color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
                 Text(

@@ -24,11 +24,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 
-private val CardBg      = Color(0xFFF3EDF7)
-private val IconBoxBg   = Color(0xFFEADDFF)
-private val PurpleText  = Color(0xFF21005D)
-private val MutedText   = Color(0xFF79747E)
-private val PowderBg    = Color(0xFFE8DEF8)
+// No private colour constants — all colours via MaterialTheme below
 
 @Composable
 fun DayView(
@@ -56,24 +52,24 @@ fun DayView(
             ) {
                 IconButton(onClick = onPrevious) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = "Previous day",
-                        tint = Color(0xFF49454F), modifier = Modifier.size(18.dp))
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = formatDate(state.date),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF1D1B20)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "Week ${isoWeek(state.date)} · ${dayTypeLabel(state.dayType)} · ${state.kcalTarget} kcal target",
                         fontSize = 11.sp,
-                        color = MutedText
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onNext) {
                     Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = "Next day",
-                        tint = Color(0xFF49454F), modifier = Modifier.size(18.dp))
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -82,8 +78,8 @@ fun DayView(
         if (state.meals.isEmpty()) {
             item {
                 Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(CardBg).padding(20.dp), contentAlignment = Alignment.Center) {
-                    Text("No meals planned for this day", fontSize = 13.sp, color = MutedText)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow).padding(20.dp), contentAlignment = Alignment.Center) {
+                    Text("No meals planned for this day", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -106,28 +102,28 @@ private fun MealCard(slot: MealSlotUi, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(CardBg)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .clickable { onClick() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(IconBoxBg),
+        Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center) {
             Icon(Icons.Default.Restaurant, contentDescription = null,
-                tint = PurpleText, modifier = Modifier.size(20.dp))
+                tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(slot.type.displayName.uppercase(), fontSize = 10.sp, color = MutedText,
+            Text(slot.type.displayName.uppercase(), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 letterSpacing = 0.6.sp)
             Text(slot.recipeName, fontSize = 14.sp, fontWeight = FontWeight.Medium,
-                color = Color(0xFF1D1B20), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 1.dp))
             Text("${slot.protein.toInt()}g P · ${slot.fat.toInt()}g F · ${slot.carbs.toInt()}g C",
-                fontSize = 11.sp, color = MutedText, modifier = Modifier.padding(top = 2.dp))
+                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
         }
         Text("${slot.kcal.toInt()}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF49454F))
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -138,17 +134,17 @@ private fun ProteinPowderRow(grams: Double, kcalTarget: Int, kcalActual: Double)
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(PowderBg)
+            .background(MaterialTheme.colorScheme.secondaryContainer)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Icon(Icons.Default.FitnessCenter, contentDescription = null,
-            tint = PurpleText, modifier = Modifier.size(24.dp))
+            tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp))
         Column {
-            Text("Core Protein Pro — ${grams}g", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PurpleText)
+            Text("Core Protein Pro — ${grams}g", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onPrimaryContainer)
             Text("+${extraProt.toInt()}g protein · +${extraKcal.toInt()} kcal to hit goal",
-                fontSize = 11.sp, color = Color(0xFF49454F), modifier = Modifier.padding(top = 1.dp))
+                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 1.dp))
         }
     }
 }

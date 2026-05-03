@@ -20,16 +20,11 @@ import androidx.compose.ui.unit.sp
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 
-private val CardBg      = Color(0xFFF3EDF7)
-private val PurpleAcc   = Color(0xFF6750A4)
+// Semantic accent colours
 private val AmberAcc    = Color(0xFFE8A000)
 private val GreenAcc    = Color(0xFF1D9E75)
-private val MealPillBg  = Color(0xFFEADDFF)
-private val MealPillTxt = Color(0xFF21005D)
 private val HCalBg      = Color(0xFFFFF0C2); private val HCalTxt = Color(0xFF7D4E00)
 private val ShopBg      = Color(0xFFD8F5E4); private val ShopTxt = Color(0xFF0A3D22)
-private val MutedText   = Color(0xFF79747E)
-private val BarTrack    = Color(0xFFE8DEF8)
 
 @Composable
 fun WeekView(
@@ -55,14 +50,14 @@ fun WeekView(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 IconButton(onClick = onPrevious) {
-                    Text("‹", fontSize = 22.sp, color = Color(0xFF49454F))
+                    Text("‹", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text(
                     "Week ${state.weekNumber}  ·  ${formatShortDate(state.startDate)}–${formatShortDate(state.endDate)}",
-                    fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1D1B20)
+                    fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface
                 )
                 IconButton(onClick = onNext) {
-                    Text("›", fontSize = 22.sp, color = Color(0xFF49454F))
+                    Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -76,25 +71,25 @@ fun WeekView(
 @Composable
 private fun WeekDayRow(day: WeekDayUi) {
     val borderModifier = when {
-        day.isToday      -> Modifier.border(1.5.dp, PurpleAcc, RoundedCornerShape(12.dp))
+        day.isToday      -> Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
         day.isHighCal    -> Modifier.border(BorderStroke(3.dp, AmberAcc),
-                                shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp))
+            shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp))
         day.isShoppingDay -> Modifier.border(BorderStroke(3.dp, GreenAcc),
-                                 shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp))
+            shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp))
         else             -> Modifier
     }
 
     val barColor = when {
         day.isHighCal    -> AmberAcc
         day.isShoppingDay -> GreenAcc
-        else             -> PurpleAcc
+        else             -> MaterialTheme.colorScheme.primary
     }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(CardBg)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .then(borderModifier)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -110,12 +105,12 @@ private fun WeekDayRow(day: WeekDayUi) {
                 append(" ${day.date.dayOfMonth}")
                 if (day.isToday) append(" · Today")
             }
-            Text(dateLabel, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1D1B20))
+            Text(dateLabel, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
 
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (day.isHighCal) Badge("High cal", HCalBg, HCalTxt)
                 if (day.isShoppingDay) Badge("Shopping", ShopBg, ShopTxt)
-                Text("${day.kcal.toInt()} kcal", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF49454F))
+                Text("${day.kcal.toInt()} kcal", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -123,8 +118,8 @@ private fun WeekDayRow(day: WeekDayUi) {
         if (day.mealNames.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 day.mealNames.take(3).forEach { name ->
-                    Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(MealPillBg).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                        Text(name, fontSize = 11.sp, color = MealPillTxt, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                        Text(name, fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.widthIn(max = 90.dp))
                     }
                 }
@@ -133,7 +128,7 @@ private fun WeekDayRow(day: WeekDayUi) {
 
         // Kcal progress bar
         val fraction = if (day.kcalTarget > 0) (day.kcal / day.kcalTarget).toFloat().coerceIn(0f, 1f) else 0f
-        Box(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(BarTrack)) {
+        Box(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.secondaryContainer)) {
             Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(fraction).clip(RoundedCornerShape(2.dp)).background(barColor))
         }
     }

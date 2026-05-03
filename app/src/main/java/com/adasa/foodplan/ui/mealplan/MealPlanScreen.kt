@@ -90,16 +90,16 @@ fun MealPlanScreen(
 @Composable
 private fun ViewToggle(selected: PlanView, onSelect: (PlanView) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFECE6F0)).padding(3.dp)) {
+        .background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp)) {
         PlanView.entries.forEach { view ->
             val active = view == selected
             Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
-                    .background(if (active) Color(0xFF6750A4) else Color.Transparent)
-                    .clickable { onSelect(view) }.padding(vertical = 6.dp),
+                .background(if (active) MaterialTheme.colorScheme.primary else Color.Transparent)
+                .clickable { onSelect(view) }.padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center) {
                 Text(view.name.lowercase().replaceFirstChar { it.uppercase() },
                     fontSize = 12.sp, fontWeight = FontWeight.Medium,
-                    color = if (active) Color.White else Color(0xFF49454F))
+                    color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

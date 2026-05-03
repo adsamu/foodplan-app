@@ -19,14 +19,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.datetime.LocalDate
 
-private val CellBg     = Color(0xFFF3EDF7)
-private val TodayBg    = Color(0xFF6750A4)
-private val SelectedBg = Color(0xFFEADDFF)
-private val SelectedTx = Color(0xFF21005D)
+// Semantic accent dots
 private val AmberDot   = Color(0xFFE8A000)
 private val GreenDot   = Color(0xFF1D9E75)
-private val PurpleDot  = Color(0xFF6750A4)
-private val MutedText  = Color(0xFF79747E)
 
 @Composable
 fun MonthView(
@@ -54,14 +49,14 @@ fun MonthView(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(onClick = onPrevious) {
-                Text("‹", fontSize = 22.sp, color = Color(0xFF49454F))
+                Text("‹", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
                 "${monthName(state.month)} ${state.year}",
-                fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1D1B20)
+                fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(onClick = onNext) {
-                Text("›", fontSize = 22.sp, color = Color(0xFF49454F))
+                Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -70,7 +65,7 @@ fun MonthView(
         Row(modifier = Modifier.fillMaxWidth()) {
             dowLabels.forEach { label ->
                 Text(label, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
-                    fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = MutedText)
+                    fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -91,17 +86,17 @@ fun MonthView(
 
                         val isSelected = selectedDate == day.date
                         val bgColor = when {
-                            day.isToday  -> TodayBg
-                            isSelected   -> SelectedBg
-                            else         -> CellBg
+                            day.isToday  -> MaterialTheme.colorScheme.primary
+                            isSelected   -> MaterialTheme.colorScheme.primaryContainer
+                            else         -> MaterialTheme.colorScheme.surfaceContainerLow
                         }
                         val textColor = when {
-                            day.isToday  -> Color.White
-                            isSelected   -> SelectedTx
-                            else         -> Color(0xFF1D1B20)
+                            day.isToday  -> MaterialTheme.colorScheme.onPrimary
+                            isSelected   -> MaterialTheme.colorScheme.onPrimaryContainer
+                            else         -> MaterialTheme.colorScheme.onSurface
                         }
                         val dotColor = when {
-                            day.isToday      -> Color.White
+                            day.isToday      -> MaterialTheme.colorScheme.onPrimary
                             day.isHighCal    -> AmberDot
                             day.isShoppingDay -> GreenDot
                             else             -> null
@@ -149,7 +144,7 @@ fun MonthView(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             LegendItem(AmberDot,  "High calorie")
             LegendItem(GreenDot,  "Shopping day")
-            LegendItem(PurpleDot, "Today")
+            LegendItem(MaterialTheme.colorScheme.primary, "Today")
         }
 
         Spacer(Modifier.height(12.dp))
@@ -160,7 +155,7 @@ fun MonthView(
 private fun LegendItem(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
-        Text(label, fontSize = 10.sp, color = Color(0xFF49454F))
+        Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

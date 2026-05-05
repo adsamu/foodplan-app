@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adasa.foodplan.domain.model.*
 import kotlinx.datetime.DayOfWeek
+import androidx.compose.foundation.BorderStroke
 
 private val batchColors = listOf(
     Color(0xFF6750A4), // batch 1 — purple
@@ -193,24 +194,25 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
                     days.forEach { day ->
                         // -1 = unset (optimizer decides), 0 = no snack, 1-3 = explicit count
                         val count = (mealSlots[day] ?: DayMealConfig()).snackCount
-                        val isUnset = count == -1
+                        val isInfinity = count == -1
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(
-                                    when {
-                                        isUnset  -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                                        count > 0 -> MaterialTheme.colorScheme.secondaryContainer
-                                        else     -> MaterialTheme.colorScheme.surfaceVariant
-                                    }
+                                    if (isInfinity) MaterialTheme.colorScheme.surfaceVariant
+                                    else MaterialTheme.colorScheme.secondaryContainer
                                 )
                                 .combinedClickable(
                                     onClick = {
                                         val current = mealSlots[day] ?: DayMealConfig()
-                                        // cycle: -1 → 0 → 1 → 2 → 3 → -1
-                                        val next = if (count >= 3) -1 else count + 1
+                                        // cycle: ∞(-1) → 1 → 2 → 3 → ∞(-1)
+                                        val next = when (count) {
+                                            -1   -> 1
+                                            3    -> -1
+                                            else -> count + 1
+                                        }
                                         viewModel.setMealSlot(day, current.copy(snackCount = next))
                                     },
                                     onLongClick = {
@@ -221,45 +223,17 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (isUnset) "−" else count.toString(),
+                                text = if (isInfinity) "∞" else count.toString(),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = when {
-                                    isUnset  -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                    count > 0 -> MaterialTheme.colorScheme.onSecondaryContainer
-                                    else     -> MaterialTheme.colorScheme.onSurfaceVariant
-                                }
+                                color = if (isInfinity) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
 
-                // Optional fill toggle second, with hint
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Optional fill",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            "Optimizer may add snacks on unset (−) days to help meet goals",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-                    Switch(
-                        checked = snackOptional,
-                        onCheckedChange = { viewModel.setSnackOptionalFill(it) }
-                    )
-                }
             }
         }
 
@@ -317,6 +291,10 @@ fun ScheduleTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
                     }
             }
         }
+
+        // ── Variety ───────────────────────────────────────────────────────
+        val variety = config?.variety ?: VarietyConfig()
+        VarietyCard(variety = variety, viewModel = viewModel)
 
         // ── Shopping ──────────────────────────────────────────────────────
         SettingsSection("Shopping")
@@ -458,6 +436,101 @@ private fun MealMatrixRow(
                     Text("✓", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
+        }
+    }
+}
+// ── Variety card ───────────────────────────────────────────────────────────
+
+@Composable
+private fun VarietyCard(
+    variety: VarietyConfig,
+    viewModel: SettingsViewModel
+) {
+    SettingsSection("Variety", "Controls how the optimizer avoids repeating recipes")
+    SettingsCard {
+        Column {
+
+            // ── Level picker ──────────────────────────────────────────────
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                Text(
+                    "Recency strictness",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    variety.level.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    VarietyLevel.entries.forEach { level ->
+                        val selected = level == variety.level
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.primary
+                                    else Color.Transparent
+                                )
+                                .clickable { viewModel.setVariety(variety.copy(level = level)) }
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                level.displayName,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            // ── Shared recency toggles ────────────────────────────────────
+            SettingsSwitchRow(
+                title   = "Lunch and dinner share history",
+                subtitle = "A recipe used for either won't repeat in the other",
+                checked = variety.lunchDinnerSharedRecency
+            ) { viewModel.setVariety(variety.copy(lunchDinnerSharedRecency = it)) }
+
+            HorizontalDivider()
+
+            SettingsSwitchRow(
+                title   = "Breakfast and snacks share history",
+                subtitle = "Useful if you eat the same breakfast and snack foods",
+                checked = variety.breakfastSnackSharedRecency
+            ) { viewModel.setVariety(variety.copy(breakfastSnackSharedRecency = it)) }
+
+            HorizontalDivider()
+
+            // ── Cross-meal rules ──────────────────────────────────────────
+            SettingsSwitchRow(
+                title   = "Lunch and dinner must differ",
+                subtitle = "No identical recipe in both slots on the same day",
+                checked = variety.lunchDinnerMustDiffer
+            ) { viewModel.setVariety(variety.copy(lunchDinnerMustDiffer = it)) }
+
+            HorizontalDivider()
+
+            SettingsSwitchRow(
+                title   = "Vary protein sources",
+                subtitle = "Avoid same meat / fish / dairy for lunch and dinner",
+                checked = variety.proteinSourceVariety
+            ) { viewModel.setVariety(variety.copy(proteinSourceVariety = it)) }
+
         }
     }
 }

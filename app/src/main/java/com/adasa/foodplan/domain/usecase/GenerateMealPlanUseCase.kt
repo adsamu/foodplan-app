@@ -21,7 +21,7 @@ class GenerateMealPlanUseCase @Inject constructor(
         return try {
             // 1. Fetch all inputs
             val config = settingsRepository.getMealPlanConfig()
-            val history = mealPlanRepository.getRecentPlans(config.variety.uniqueWeeksBeforeRepeat)
+            val history = mealPlanRepository.getRecentPlans(config.variety.level.recencyWindowWeeks)
             val ratings = ratingRepository.getAllRatings().first()
 
             // 2. Fetch all recipes (meals + components) — components needed for sub-recipe nutrition

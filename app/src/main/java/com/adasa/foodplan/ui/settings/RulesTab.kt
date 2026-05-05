@@ -17,10 +17,7 @@ import java.util.UUID
 @Composable
 fun RulesTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
     val rules = config?.rules ?: emptyList()
-    val variety = config?.variety ?: VarietyConfig()
     var showAddRule by remember { mutableStateOf(false) }
-    var maxDaysInARow by remember(variety) { mutableIntStateOf(variety.maxDaysInARow) }
-    var uniqueWeeks by remember(variety) { mutableIntStateOf(variety.uniqueWeeksBeforeRepeat) }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -68,72 +65,6 @@ fun RulesTab(config: MealPlanConfig?, viewModel: SettingsViewModel) {
                         onCancel = { showAddRule = false }
                     )
                 }
-            }
-        }
-
-        // Variety
-        SettingsSection("Variety")
-        SettingsCard {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Max days in a row", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Text("Same meal, consecutive days (excl. batch)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    StepperControl(
-                        value = maxDaysInARow,
-                        label = "$maxDaysInARow",
-                        onDecrement = {
-                            if (maxDaysInARow > 1) {
-                                maxDaysInARow--
-                                viewModel.setVariety(variety.copy(maxDaysInARow = maxDaysInARow))
-                            }
-                        },
-                        onIncrement = {
-                            maxDaysInARow++
-                            viewModel.setVariety(variety.copy(maxDaysInARow = maxDaysInARow))
-                        }
-                    )
-                }
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Unique weeks before repeat", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Text("Different weeks before cycling back",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    StepperControl(
-                        value = uniqueWeeks,
-                        label = "$uniqueWeeks",
-                        onDecrement = {
-                            if (uniqueWeeks > 1) {
-                                uniqueWeeks--
-                                viewModel.setVariety(variety.copy(uniqueWeeksBeforeRepeat = uniqueWeeks))
-                            }
-                        },
-                        onIncrement = {
-                            uniqueWeeks++
-                            viewModel.setVariety(variety.copy(uniqueWeeksBeforeRepeat = uniqueWeeks))
-                        }
-                    )
-                }
-                HorizontalDivider()
-                SettingsSwitchRow(
-                    title = "Protein source variety",
-                    subtitle = "Alternate chicken / beef / fish",
-                    checked = variety.proteinSourceVariety
-                ) { viewModel.setVariety(variety.copy(proteinSourceVariety = it)) }
             }
         }
 

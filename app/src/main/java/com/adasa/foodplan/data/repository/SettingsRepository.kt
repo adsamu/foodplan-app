@@ -43,10 +43,21 @@ class SettingsRepository @Inject constructor(
         val EXCLUDED_INGREDIENT_IDS = stringPreferencesKey("excluded_ingredient_ids")
         val PREFERRED_INGREDIENT_IDS = stringPreferencesKey("preferred_ingredient_ids")
         val DISLIKED_INGREDIENT_IDS = stringPreferencesKey("disliked_ingredient_ids")
-        // Variety
-        val MAX_DAYS_IN_A_ROW = intPreferencesKey("max_days_in_a_row")
-        val UNIQUE_WEEKS = intPreferencesKey("unique_weeks")
-        val PROTEIN_VARIETY = booleanPreferencesKey("protein_source_variety")
+        // Variety — level & cross-meal
+        val VARIETY_LEVEL = stringPreferencesKey("variety_level")
+        val VARIETY_LUNCH_DINNER_SHARED = booleanPreferencesKey("variety_lunch_dinner_shared")
+        val VARIETY_BREAKFAST_SNACK_SHARED = booleanPreferencesKey("variety_breakfast_snack_shared")
+        val VARIETY_LUNCH_DINNER_MUST_DIFFER = booleanPreferencesKey("variety_lunch_dinner_must_differ")
+        val VARIETY_PROTEIN_SOURCE = booleanPreferencesKey("protein_source_variety")
+        // Variety — per-category limits (-1 stored = unlimited / null)
+        val VARIETY_BREAKFAST_MAX_WEEK  = intPreferencesKey("variety_breakfast_max_week")
+        val VARIETY_BREAKFAST_MAX_CONSEC = intPreferencesKey("variety_breakfast_max_consec")
+        val VARIETY_LUNCH_MAX_WEEK      = intPreferencesKey("variety_lunch_max_week")
+        val VARIETY_LUNCH_MAX_CONSEC    = intPreferencesKey("variety_lunch_max_consec")
+        val VARIETY_DINNER_MAX_WEEK     = intPreferencesKey("variety_dinner_max_week")
+        val VARIETY_DINNER_MAX_CONSEC   = intPreferencesKey("variety_dinner_max_consec")
+        val VARIETY_SNACK_MAX_WEEK      = intPreferencesKey("variety_snack_max_week")
+        val VARIETY_SNACK_MAX_CONSEC    = intPreferencesKey("variety_snack_max_consec")
         // Schedule
         val SNACK_OPTIONAL_FILL = booleanPreferencesKey("snack_optional_fill")
         // Shopping
@@ -62,6 +73,8 @@ class SettingsRepository @Inject constructor(
         val POWDER_LOW_STOCK_WARNING = booleanPreferencesKey("powder_low_stock_warning")
         // App
         val THEME = stringPreferencesKey("app_theme")
+
+        private const val UNLIMITED = -1  // sentinel stored for null Int limits
     }
 
     // ── Full config assembly ───────────────────────────────────────────────
@@ -71,7 +84,6 @@ class SettingsRepository @Inject constructor(
         val slotConfigs = dao.getAllMealSlotConfigsOnce()
         val batchGroups = dao.getAllBatchGroupsOnce()
         val rules = dao.getAllRulesOnce()
-
         return MealPlanConfig(
             schedule = buildScheduleConfig(prefs, slotConfigs, batchGroups),
             goals = buildNutritionGoals(prefs),
@@ -150,23 +162,47 @@ class SettingsRepository @Inject constructor(
             dislikedIngredientIds = prefs[DISLIKED_INGREDIENT_IDS]?.splitToSet() ?: emptySet()
         )
 
-    private fun buildVarietyConfig(prefs: androidx.datastore.preferences.core.Preferences) =
-        VarietyConfig(
-            maxDaysInARow = prefs[MAX_DAYS_IN_A_ROW] ?: 2,
-            uniqueWeeksBeforeRepeat = prefs[UNIQUE_WEEKS] ?: 3,
-            proteinSourceVariety = prefs[PROTEIN_VARIETY] ?: true
+    private fun buildVarietyConfig(prefs: androidx.datastore.preferences.core.Preferences): VarietyConfig {
+        fun Int?.toLimit() = if (this == null || this == UNLIMITED) null else this
+        return VarietyConfig(
+            level = prefs[VARIETY_LEVEL]
+                ?.let { runCatching { VarietyLevel.valueOf(it) }.getOrNull() }
+                ?: VarietyLevel.BALANCED,
+            lunchDinnerSharedRecency = prefs[VARIETY_LUNCH_DINNER_SHARED] ?: true,
+            breakfastSnackSharedRecency = prefs[VARIETY_BREAKFAST_SNACK_SHARED] ?: false,
+            lunchDinnerMustDiffer = prefs[VARIETY_LUNCH_DINNER_MUST_DIFFER] ?: true,
+            proteinSourceVariety = prefs[VARIETY_PROTEIN_SOURCE] ?: true,
+            perCategory = mapOf(
+                MealCategory.BREAKFAST to MealCategoryVariety(
+                    maxTimesPerWeek    = prefs[VARIETY_BREAKFAST_MAX_WEEK].toLimit(),
+                    maxConsecutiveDays = prefs[VARIETY_BREAKFAST_MAX_CONSEC].toLimit()
+                ),
+                MealCategory.LUNCH to MealCategoryVariety(
+                    maxTimesPerWeek    = (prefs[VARIETY_LUNCH_MAX_WEEK] ?: 3).toLimit(),
+                    maxConsecutiveDays = (prefs[VARIETY_LUNCH_MAX_CONSEC] ?: 2).toLimit()
+                ),
+                MealCategory.DINNER to MealCategoryVariety(
+                    maxTimesPerWeek    = (prefs[VARIETY_DINNER_MAX_WEEK] ?: 2).toLimit(),
+                    maxConsecutiveDays = (prefs[VARIETY_DINNER_MAX_CONSEC] ?: 2).toLimit()
+                ),
+                MealCategory.SNACK to MealCategoryVariety(
+                    maxTimesPerWeek    = (prefs[VARIETY_SNACK_MAX_WEEK] ?: 3).toLimit(),
+                    maxConsecutiveDays = prefs[VARIETY_SNACK_MAX_CONSEC].toLimit()
+                )
+            )
         )
+    }
 
     private fun buildProteinPowder(prefs: androidx.datastore.preferences.core.Preferences): ProteinPowder? {
         val id   = prefs[POWDER_INGREDIENT_ID] ?: return null
         val name = prefs[POWDER_NAME] ?: return null
         return ProteinPowder(
-            ingredientId   = id,
-            name           = name,
-            proteinPer100g = prefs[POWDER_PROTEIN_PER_100G] ?: 0.0,
-            kcalPer100g    = prefs[POWDER_KCAL_PER_100G]    ?: 0.0,
-            gramsInStock   = prefs[POWDER_GRAMS_IN_STOCK]   ?: 0.0,
-            autoFillGap    = prefs[POWDER_AUTO_FILL]         ?: true,
+            ingredientId    = id,
+            name            = name,
+            proteinPer100g  = prefs[POWDER_PROTEIN_PER_100G] ?: 0.0,
+            kcalPer100g     = prefs[POWDER_KCAL_PER_100G]    ?: 0.0,
+            gramsInStock    = prefs[POWDER_GRAMS_IN_STOCK]   ?: 0.0,
+            autoFillGap     = prefs[POWDER_AUTO_FILL]         ?: true,
             lowStockWarning = prefs[POWDER_LOW_STOCK_WARNING] ?: true
         )
     }
@@ -224,10 +260,27 @@ class SettingsRepository @Inject constructor(
         it[DISLIKED_INGREDIENT_IDS] = ids.joinToString(",")
     }
 
-    suspend fun setVariety(config: VarietyConfig) = dataStore.edit {
-        it[MAX_DAYS_IN_A_ROW] = config.maxDaysInARow
-        it[UNIQUE_WEEKS] = config.uniqueWeeksBeforeRepeat
-        it[PROTEIN_VARIETY] = config.proteinSourceVariety
+    suspend fun setVariety(config: VarietyConfig) = dataStore.edit { prefs ->
+        fun Int?.toStored() = this ?: UNLIMITED
+        prefs[VARIETY_LEVEL]                   = config.level.name
+        prefs[VARIETY_LUNCH_DINNER_SHARED]      = config.lunchDinnerSharedRecency
+        prefs[VARIETY_BREAKFAST_SNACK_SHARED]   = config.breakfastSnackSharedRecency
+        prefs[VARIETY_LUNCH_DINNER_MUST_DIFFER] = config.lunchDinnerMustDiffer
+        prefs[VARIETY_PROTEIN_SOURCE]           = config.proteinSourceVariety
+
+        val bf = config.perCategory[MealCategory.BREAKFAST]
+        val lu = config.perCategory[MealCategory.LUNCH]
+        val di = config.perCategory[MealCategory.DINNER]
+        val sn = config.perCategory[MealCategory.SNACK]
+
+        prefs[VARIETY_BREAKFAST_MAX_WEEK]   = bf?.maxTimesPerWeek.toStored()
+        prefs[VARIETY_BREAKFAST_MAX_CONSEC] = bf?.maxConsecutiveDays.toStored()
+        prefs[VARIETY_LUNCH_MAX_WEEK]       = lu?.maxTimesPerWeek.toStored()
+        prefs[VARIETY_LUNCH_MAX_CONSEC]     = lu?.maxConsecutiveDays.toStored()
+        prefs[VARIETY_DINNER_MAX_WEEK]      = di?.maxTimesPerWeek.toStored()
+        prefs[VARIETY_DINNER_MAX_CONSEC]    = di?.maxConsecutiveDays.toStored()
+        prefs[VARIETY_SNACK_MAX_WEEK]       = sn?.maxTimesPerWeek.toStored()
+        prefs[VARIETY_SNACK_MAX_CONSEC]     = sn?.maxConsecutiveDays.toStored()
     }
 
     suspend fun setSnackOptionalFill(enabled: Boolean) = dataStore.edit {
@@ -248,23 +301,21 @@ class SettingsRepository @Inject constructor(
         kcalPer100g:    Double,
         gramsInStock:   Double
     ) = dataStore.edit {
-        it[POWDER_INGREDIENT_ID]   = ingredientId
-        it[POWDER_NAME]            = name
+        it[POWDER_INGREDIENT_ID]    = ingredientId
+        it[POWDER_NAME]             = name
         it[POWDER_PROTEIN_PER_100G] = proteinPer100g
-        it[POWDER_KCAL_PER_100G]   = kcalPer100g
-        it[POWDER_GRAMS_IN_STOCK]  = gramsInStock
+        it[POWDER_KCAL_PER_100G]    = kcalPer100g
+        it[POWDER_GRAMS_IN_STOCK]   = gramsInStock
     }
 
-    suspend fun restockPowder(grams: Double) = dataStore.edit {
-        it[POWDER_GRAMS_IN_STOCK] = grams
-    }
+    suspend fun restockPowder(grams: Double) = dataStore.edit { it[POWDER_GRAMS_IN_STOCK] = grams }
     suspend fun setPowderAutoFill(enabled: Boolean) = dataStore.edit { it[POWDER_AUTO_FILL] = enabled }
     suspend fun setPowderLowStockWarning(enabled: Boolean) = dataStore.edit { it[POWDER_LOW_STOCK_WARNING] = enabled }
 
     suspend fun setTheme(theme: String) = dataStore.edit { it[THEME] = theme }
     fun getThemeFlow(): Flow<String> = dataStore.data.map { it[THEME] ?: "system" }
 
-    suspend fun setMealSlotConfig(dayOfWeek: DayOfWeek, config: com.adasa.foodplan.domain.model.DayMealConfig) =
+    suspend fun setMealSlotConfig(dayOfWeek: DayOfWeek, config: DayMealConfig) =
         dao.upsertMealSlotConfig(
             MealSlotConfigEntity(
                 dayOfWeek  = dayOfWeek.isoDayNumber,

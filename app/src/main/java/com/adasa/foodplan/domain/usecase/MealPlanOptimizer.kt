@@ -1,14 +1,20 @@
 package com.adasa.foodplan.domain.usecase
 
 import com.adasa.foodplan.domain.model.*
+import com.adasa.foodplan.domain.usecase.MealPlanOptimizer.Slot
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.daysUntil
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.random.Random
+
+
+/** State: maps every slot in the week to a recipeId (or NULL_SNACK_ID). */
+private typealias State = Map<MealPlanOptimizer.Slot, String>
 
 /**
  * Pure optimizer — no I/O, no side effects. All inputs are pre-assembled by
@@ -134,14 +140,12 @@ object MealPlanOptimizer {
      * Uniquely identifies one meal slot within the week.
      * [index] disambiguates multiple snack slots on the same day.
      */
-    private data class Slot(
+    public data class Slot(
         val date:     LocalDate,
         val category: MealCategory,
         val index:    Int
     )
 
-    /** State: maps every slot in the week to a recipeId (or NULL_SNACK_ID). */
-    private typealias State = Map<Slot, String>
 
     private data class WeightedRecipe(
         val recipe:          Recipe,

@@ -25,7 +25,7 @@ class GenerateMealPlanUseCase @Inject constructor(
             val ratings = ratingRepository.getAllRatings().first()
 
             // 2. Fetch all recipes (meals + components) — components needed for sub-recipe nutrition
-            val allRecipes = recipeRepository.getAllRecipesWithIngredients()
+            val allRecipes = recipeRepository.getAllMealRecipesWithIngredients()
             val mealRecipes = allRecipes.filter { it.type == RecipeType.MEAL }
 
             // 3. Build ingredient map for nutrition computation

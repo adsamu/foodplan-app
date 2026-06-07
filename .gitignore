@@ -1,17 +1,85 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+# ---------------------------------------------------------------------------
+# OS / editor
+# ---------------------------------------------------------------------------
 .DS_Store
+Thumbs.db
+*.swp
+*~
+
+# JetBrains / Android Studio
+*.iml
+.idea/
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+
+# VS Code
+.vscode/
+
+# ---------------------------------------------------------------------------
+# Android / Gradle
+# ---------------------------------------------------------------------------
+.gradle/
+build/
 /build
 /captures
-.externalNativeBuild
-.cxx
+.externalNativeBuild/
+.cxx/
 local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.keystore
+*.jks
+
+# Android SDK / NDK auto-generated
+/android/.kotlin/
+/android/app/release/
+/android/app/debug/
+
+# Firebase / Google services secrets
 google-services.json
-/.idea/
+GoogleService-Info.plist
+firebase-debug.log
+.firebase/
+.firebaserc.local
+
+# ---------------------------------------------------------------------------
+# Python / Firebase Functions
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test / coverage artefacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+coverage.xml
+
+# Distribution / packaging
+build/
+dist/
+*.manifest
+*.spec
+
+# ---------------------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------------------
+*.log

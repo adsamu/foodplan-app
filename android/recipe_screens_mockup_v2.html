@@ -1,0 +1,404 @@
+
+<style>
+  .pw { display:flex; flex-wrap:wrap; gap:32px; justify-content:center; padding:24px; background:#1e1e1e; border-radius:12px; }
+  .ph-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .ph-title { color:#ccc; font-size:13px; font-weight:500; }
+  .ph { width:300px; height:620px; background:#fef7ff; border-radius:30px; border:7px solid #111; overflow:hidden; display:flex; flex-direction:column; font-family:var(--font-sans); position:relative; }
+  .sb { height:24px; display:flex; justify-content:space-between; align-items:center; padding:0 14px; font-size:11px; font-weight:600; color:#1d1b20; background:#fef7ff; flex-shrink:0; }
+  .tb { padding:8px 14px 6px; display:flex; align-items:center; gap:8px; background:#fef7ff; flex-shrink:0; }
+  .tb h1 { font-size:20px; font-weight:500; color:#1d1b20; flex:1; margin:0; }
+  .back { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#49454f; font-size:16px; cursor:pointer; }
+  .ibtn { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#49454f; font-size:15px; cursor:pointer; }
+  .sbar { margin:4px 14px 8px; background:#ece6f0; border-radius:28px; padding:8px 14px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .sinp { flex:1; border:none; background:transparent; font-size:14px; color:#1d1b20; outline:none; font-family:var(--font-sans); }
+  .sinp::placeholder { color:#79747e; }
+  .chips { display:flex; gap:6px; padding:0 14px 10px; overflow-x:auto; flex-shrink:0; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chip { padding:5px 12px; border-radius:8px; border:1px solid #79747e; font-size:12px; white-space:nowrap; color:#49454f; cursor:pointer; flex-shrink:0; }
+  .chip.active { background:#e8def8; border-color:#e8def8; color:#21005d; font-weight:500; }
+  .cnt { flex:1; overflow-y:auto; padding:4px 14px 8px; }
+  .cnt::-webkit-scrollbar { display:none; }
+  .slbl { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; color:#79747e; padding:8px 0 6px; }
+  .rc { background:#f3edf7; border-radius:14px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:10px; cursor:pointer; }
+  .ri { width:40px; height:40px; border-radius:10px; background:#eaddff; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .rinfo { flex:1; min-width:0; }
+  .rname { font-size:14px; font-weight:500; color:#1d1b20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rkcal { font-size:12px; font-weight:600; color:#49454f; white-space:nowrap; }
+  .badge { display:inline-block; padding:2px 7px; border-radius:6px; font-size:10px; font-weight:500; margin-right:4px; margin-top:3px; }
+  .bm { background:#eaddff; color:#21005d; }
+  .bc { background:#ffd8e4; color:#31111d; }
+  .bnav { height:68px; background:#f3edf7; display:flex; padding:8px; flex-shrink:0; }
+  .ni { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; cursor:pointer; }
+  .nic { width:52px; height:28px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:14px; color:#79747e; }
+  .ni.active .nic { background:#e8def8; }
+  .nlbl { font-size:10px; color:#79747e; font-weight:500; }
+  .ni.active .nlbl { color:#1d1b20; font-weight:600; }
+  .fab { position:absolute; bottom:80px; right:14px; width:48px; height:48px; background:#eaddff; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:22px; color:#21005d; cursor:pointer; }
+  .hero { background:linear-gradient(160deg,#eaddff,#e8def8); padding:16px 14px 14px; flex-shrink:0; }
+  .htitle { font-size:22px; font-weight:500; color:#21005d; margin-bottom:6px; }
+  .hbadges { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:12px; }
+  .mrow { display:flex; gap:6px; }
+  .mbox { flex:1; background:rgba(255,255,255,0.6); border-radius:10px; padding:8px; text-align:center; }
+  .mval { font-size:16px; font-weight:600; color:#21005d; }
+  .mlbl { font-size:10px; color:#49454f; text-transform:uppercase; letter-spacing:0.4px; }
+  .ingrow { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid #e8def8; }
+  .ingnm { flex:1; font-size:13px; color:#1d1b20; }
+  .ingamt { font-size:12px; color:#79747e; }
+  .ingkcal { font-size:11px; color:#79747e; min-width:48px; text-align:right; }
+  .ingic { width:28px; height:28px; border-radius:8px; background:#eaddff; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .subb { font-size:10px; background:#ffd8e4; color:#31111d; padding:2px 6px; border-radius:4px; margin-left:4px; }
+  .editbtn { position:absolute; bottom:80px; right:14px; background:#6750a4; color:white; border-radius:24px; padding:10px 20px; font-size:14px; font-weight:500; display:flex; align-items:center; gap:6px; cursor:pointer; }
+
+  /* Directions card */
+  .dir-card { background:#f3edf7; border-radius:14px; padding:12px 14px; margin-bottom:8px; }
+  .step-row { display:flex; gap:10px; padding:8px 0; border-bottom:1px solid #e8def8; }
+  .step-row:last-child { border-bottom:none; }
+  .step-num { width:22px; height:22px; border-radius:50%; background:#6750a4; color:white; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+  .step-text { flex:1; font-size:13px; color:#1d1b20; line-height:1.5; }
+
+  /* Checkbox step for detail */
+  .step-check { width:20px; height:20px; border-radius:50%; border:2px solid #cac4d0; flex-shrink:0; margin-top:1px; cursor:pointer; position:relative; }
+  .step-check.done { background:#6750a4; border-color:#6750a4; }
+  .step-check.done::after { content:'✓'; position:absolute; color:white; font-size:12px; font-weight:600; top:-1px; left:3px; }
+  .step-row.done-row .step-text { color:#79747e; text-decoration:line-through; }
+
+  /* Add step button & expand */
+  .add-step-btn { width:100%; padding:9px; background:transparent; border:1px dashed #79747e; border-radius:10px; color:#6750a4; font-size:13px; font-weight:500; cursor:pointer; margin-top:8px; }
+  .step-options { display:none; flex-direction:row; gap:8px; margin-top:8px; }
+  .step-options.show { display:flex; }
+  .step-opt { flex:1; padding:9px; border-radius:10px; border:1px solid #cac4d0; font-size:13px; text-align:center; cursor:pointer; color:#49454f; }
+  .step-opt.primary { border-color:#6750a4; color:#6750a4; }
+  .step-opt.muted { color:#cac4d0; border-color:#e8def8; font-size:11px; }
+
+  /* Add/edit form */
+  .flbl { font-size:11px; color:#79747e; padding:10px 0 4px; }
+  .finp { width:100%; padding:10px 12px; border:1px solid #79747e; border-radius:8px; font-size:14px; background:transparent; color:#1d1b20; font-family:var(--font-sans); box-sizing:border-box; }
+  .trow { display:flex; gap:8px; margin-bottom:4px; }
+  .tbtn { flex:1; padding:9px; border-radius:10px; border:1px solid #cac4d0; font-size:13px; text-align:center; cursor:pointer; color:#49454f; }
+  .tbtn.active { background:#e8def8; border-color:#e8def8; color:#21005d; font-weight:500; }
+  .ccps { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:4px; }
+  .ccp { padding:5px 10px; border-radius:8px; border:1px solid #cac4d0; font-size:12px; cursor:pointer; color:#49454f; }
+  .ccp.active { background:#e8def8; border-color:#e8def8; color:#21005d; }
+  .airw { display:flex; align-items:center; gap:6px; background:#f3edf7; padding:8px 10px; border-radius:10px; margin-bottom:5px; }
+  .ainm { flex:1; font-size:13px; color:#1d1b20; }
+  .aiip { width:54px; padding:4px 6px; border:1px solid #cac4d0; border-radius:6px; text-align:right; font-size:12px; background:#fef7ff; }
+  .aiut { font-size:11px; color:#79747e; }
+  .aikc { font-size:11px; color:#79747e; min-width:44px; text-align:right; }
+  .addb { width:100%; padding:10px; background:transparent; border:1px dashed #79747e; border-radius:10px; color:#6750a4; font-size:13px; font-weight:500; cursor:pointer; margin-top:4px; }
+
+  /* Editable step row */
+  .estep { display:flex; align-items:flex-start; gap:8px; background:#f3edf7; padding:8px 10px; border-radius:10px; margin-bottom:5px; }
+  .estep-num { width:22px; height:22px; border-radius:50%; background:#6750a4; color:white; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+  .estep-inp { flex:1; border:none; background:transparent; font-size:13px; color:#1d1b20; font-family:var(--font-sans); outline:none; resize:none; }
+
+  .tots { background:#eaddff; border-radius:12px; padding:10px 14px; margin-top:8px; }
+  .tots-t { font-size:11px; color:#49454f; margin-bottom:5px; }
+  .tots-v { display:flex; gap:10px; font-size:12px; color:#21005d; }
+  .tots-v b { font-size:15px; }
+  .savebtn { width:100%; padding:12px; background:#6750a4; color:white; border:none; border-radius:22px; font-size:14px; font-weight:500; cursor:pointer; margin-top:10px; }
+</style>
+
+<div class="pw">
+
+  <!-- RECIPE LIST -->
+  <div class="ph-wrap">
+    <div class="ph-title">Recipe list</div>
+    <div class="ph">
+      <div class="sb"><span>09:41</span><span>100%</span></div>
+      <div class="tb"><h1>Recipes</h1></div>
+      <div class="sbar">
+        <span style="font-size:14px;color:#49454f;">&#9906;</span>
+        <input class="sinp" placeholder="Search recipes..." />
+      </div>
+      <div class="chips">
+        <div class="chip active" onclick="fc(this)">All</div>
+        <div class="chip" onclick="fc(this)">Meals</div>
+        <div class="chip" onclick="fc(this)">Components</div>
+        <div class="chip" onclick="fc(this)">Breakfast</div>
+        <div class="chip" onclick="fc(this)">Lunch</div>
+        <div class="chip" onclick="fc(this)">Dinner</div>
+        <div class="chip" onclick="fc(this)">Snack</div>
+      </div>
+      <div class="cnt">
+        <div class="slbl">Meals</div>
+        <div class="rc">
+          <div class="ri">&#127837;</div>
+          <div class="rinfo">
+            <div class="rname">Buckwheat chicken</div>
+            <div><span class="badge bm">Lunch</span><span class="badge bm">Dinner</span></div>
+          </div>
+          <div class="rkcal">524 kcal</div>
+        </div>
+        <div class="rc">
+          <div class="ri">&#127869;</div>
+          <div class="rinfo">
+            <div class="rname">Tuna with rice</div>
+            <div><span class="badge bm">Dinner</span></div>
+          </div>
+          <div class="rkcal">678 kcal</div>
+        </div>
+        <div class="rc">
+          <div class="ri">&#127828;</div>
+          <div class="rinfo">
+            <div class="rname">Quesadillas</div>
+            <div><span class="badge bm">Dinner</span></div>
+          </div>
+          <div class="rkcal">700 kcal</div>
+        </div>
+        <div class="rc">
+          <div class="ri">&#127859;</div>
+          <div class="rinfo">
+            <div class="rname">Fried rice</div>
+            <div><span class="badge bm">Lunch</span><span class="badge bm">Dinner</span></div>
+          </div>
+          <div class="rkcal">754 kcal</div>
+        </div>
+        <div class="slbl">Components</div>
+        <div class="rc">
+          <div class="ri">&#127974;</div>
+          <div class="rinfo">
+            <div class="rname">Tzatziki</div>
+            <div><span class="badge bc">Sauce</span></div>
+          </div>
+          <div class="rkcal">89 kcal</div>
+        </div>
+        <div class="rc">
+          <div class="ri">&#129367;</div>
+          <div class="rinfo">
+            <div class="rname">Guacamole</div>
+            <div><span class="badge bc">Salsa</span></div>
+          </div>
+          <div class="rkcal">142 kcal</div>
+        </div>
+        <div style="height:60px;"></div>
+      </div>
+      <div class="fab">+</div>
+      <div class="bnav">
+        <div class="ni"><div class="nic">&#128202;</div><div class="nlbl">Overview</div></div>
+        <div class="ni active"><div class="nic">&#128214;</div><div class="nlbl">Recipes</div></div>
+        <div class="ni"><div class="nic">&#128722;</div><div class="nlbl">Shopping</div></div>
+        <div class="ni"><div class="nic">&#9881;</div><div class="nlbl">Settings</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECIPE DETAIL -->
+  <div class="ph-wrap">
+    <div class="ph-title">Recipe detail</div>
+    <div class="ph">
+      <div class="sb"><span>09:41</span><span>100%</span></div>
+      <div class="tb">
+        <div class="back">&#8592;</div>
+        <h1></h1>
+        <div class="ibtn">&#128465;</div>
+      </div>
+      <div class="hero">
+        <div class="htitle">Buckwheat chicken</div>
+        <div class="hbadges">
+          <span class="badge bm">Lunch</span>
+          <span class="badge bm">Dinner</span>
+        </div>
+        <div class="mrow">
+          <div class="mbox"><div class="mval">524</div><div class="mlbl">kcal</div></div>
+          <div class="mbox"><div class="mval">43g</div><div class="mlbl">protein</div></div>
+          <div class="mbox"><div class="mval">9g</div><div class="mlbl">fat</div></div>
+          <div class="mbox"><div class="mval">65g</div><div class="mlbl">carbs</div></div>
+        </div>
+      </div>
+      <div class="cnt">
+        <div class="slbl">Ingredients</div>
+        <div class="ingrow">
+          <div class="ingic">&#129367;</div>
+          <div class="ingnm">Chicken breast</div>
+          <div class="ingamt">180g</div>
+          <div class="ingkcal">162 kcal</div>
+        </div>
+        <div class="ingrow">
+          <div class="ingic">&#127806;</div>
+          <div class="ingnm">Buckwheat (dry)</div>
+          <div class="ingamt">85g</div>
+          <div class="ingkcal">303 kcal</div>
+        </div>
+        <div class="ingrow">
+          <div class="ingic">&#127974;</div>
+          <div class="ingnm">Tzatziki <span class="subb">recipe</span></div>
+          <div class="ingamt">0.5 serv.</div>
+          <div class="ingkcal">59 kcal</div>
+        </div>
+
+        <div class="slbl" style="margin-top:8px;">Directions</div>
+        <div class="dir-card">
+          <div class="step-row" onclick="toggleStep(this)">
+            <div class="step-check"></div>
+            <div class="step-text">Cook buckwheat according to package instructions. Set aside.</div>
+          </div>
+          <div class="step-row" onclick="toggleStep(this)">
+            <div class="step-check"></div>
+            <div class="step-text">Season chicken breast with salt and pepper. Grill or pan-fry until cooked through, about 6–8 minutes per side.</div>
+          </div>
+          <div class="step-row" onclick="toggleStep(this)">
+            <div class="step-check"></div>
+            <div class="step-text">Slice chicken and serve over buckwheat. Top with tzatziki.</div>
+          </div>
+        </div>
+
+        <div style="height:70px;"></div>
+      </div>
+      <div class="editbtn">&#9998; Edit</div>
+      <div class="bnav">
+        <div class="ni"><div class="nic">&#128202;</div><div class="nlbl">Overview</div></div>
+        <div class="ni active"><div class="nic">&#128214;</div><div class="nlbl">Recipes</div></div>
+        <div class="ni"><div class="nic">&#128722;</div><div class="nlbl">Shopping</div></div>
+        <div class="ni"><div class="nic">&#9881;</div><div class="nlbl">Settings</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD/EDIT RECIPE -->
+  <div class="ph-wrap">
+    <div class="ph-title">Add / edit recipe</div>
+    <div class="ph">
+      <div class="sb"><span>09:41</span><span>100%</span></div>
+      <div class="tb">
+        <div class="back">&#8592;</div>
+        <h1 style="font-size:16px;">New recipe</h1>
+        <div class="ibtn">&#128190;</div>
+      </div>
+      <div class="cnt">
+        <div class="flbl">Name</div>
+        <input class="finp" value="Buckwheat chicken" />
+
+        <div class="flbl">Type</div>
+        <div class="trow">
+          <div class="tbtn active" onclick="tt(this)">Meal</div>
+          <div class="tbtn" onclick="tt(this)">Component</div>
+        </div>
+
+        <div id="mc">
+          <div class="flbl">Category (one or more)</div>
+          <div class="ccps">
+            <div class="ccp" onclick="this.classList.toggle('active')">Breakfast</div>
+            <div class="ccp active" onclick="this.classList.toggle('active')">Lunch</div>
+            <div class="ccp active" onclick="this.classList.toggle('active')">Dinner</div>
+            <div class="ccp" onclick="this.classList.toggle('active')">Snack</div>
+          </div>
+        </div>
+
+        <div id="cc" style="display:none;">
+          <div class="flbl">Component type</div>
+          <div class="ccps">
+            <div class="ccp active" onclick="so(this)">Sauce</div>
+            <div class="ccp" onclick="so(this)">Dressing</div>
+            <div class="ccp" onclick="so(this)">Salsa</div>
+            <div class="ccp" onclick="so(this)">Salad</div>
+            <div class="ccp" onclick="so(this)">Side</div>
+            <div class="ccp" onclick="so(this)">Other</div>
+          </div>
+        </div>
+
+        <div class="flbl">Ingredients</div>
+        <div class="airw">
+          <div class="ingic" style="margin-right:2px;">&#129367;</div>
+          <div class="ainm">Chicken breast</div>
+          <input class="aiip" value="180" />
+          <span class="aiut">g</span>
+          <span class="aikc">162 kcal</span>
+        </div>
+        <div class="airw">
+          <div class="ingic" style="margin-right:2px;">&#127806;</div>
+          <div class="ainm">Buckwheat (dry)</div>
+          <input class="aiip" value="85" />
+          <span class="aiut">g</span>
+          <span class="aikc">303 kcal</span>
+        </div>
+        <div class="airw">
+          <div class="ingic" style="margin-right:2px;">&#127974;</div>
+          <div class="ainm">Tzatziki <span class="subb">recipe</span></div>
+          <input class="aiip" value="0.5" />
+          <span class="aiut">serv.</span>
+          <span class="aikc">59 kcal</span>
+        </div>
+        <button class="addb">+ Add ingredient or recipe</button>
+
+        <div class="flbl" style="margin-top:8px;">Directions</div>
+        <div class="dir-card" id="steps-list">
+          <div class="estep">
+            <div class="estep-num">1</div>
+            <textarea class="estep-inp" rows="2">Cook buckwheat according to package instructions. Set aside.</textarea>
+          </div>
+          <div class="estep">
+            <div class="estep-num">2</div>
+            <textarea class="estep-inp" rows="2">Season and cook chicken until done, about 6–8 min per side.</textarea>
+          </div>
+        </div>
+
+        <button class="add-step-btn" id="addStepBtn" onclick="toggleStepOpts()">+ Add step</button>
+        <div class="step-options" id="stepOpts">
+          <div class="step-opt primary" onclick="addStep()">&#10133; Step</div>
+          <div class="step-opt muted">&#9201; Timer — coming soon</div>
+        </div>
+
+        <div class="tots">
+          <div class="tots-t">Total per serving</div>
+          <div class="tots-v">
+            <span><b>524</b> kcal</span>
+            <span>&middot;</span>
+            <span><b>43g</b> P</span>
+            <span>&middot;</span>
+            <span><b>9g</b> F</span>
+            <span>&middot;</span>
+            <span><b>65g</b> K</span>
+          </div>
+        </div>
+
+        <button class="savebtn">Save recipe</button>
+        <div style="height:16px;"></div>
+      </div>
+      <div class="bnav">
+        <div class="ni"><div class="nic">&#128202;</div><div class="nlbl">Overview</div></div>
+        <div class="ni active"><div class="nic">&#128214;</div><div class="nlbl">Recipes</div></div>
+        <div class="ni"><div class="nic">&#128722;</div><div class="nlbl">Shopping</div></div>
+        <div class="ni"><div class="nic">&#9881;</div><div class="nlbl">Settings</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function fc(el) {
+  el.closest('.chips').querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+function tt(el) {
+  el.closest('.trow').querySelectorAll('.tbtn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const isMeal = el.textContent.trim() === 'Meal';
+  document.getElementById('mc').style.display = isMeal ? '' : 'none';
+  document.getElementById('cc').style.display = isMeal ? 'none' : '';
+}
+function so(el) {
+  el.closest('.ccps').querySelectorAll('.ccp').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+function toggleStep(row) {
+  row.classList.toggle('done-row');
+  row.querySelector('.step-check').classList.toggle('done');
+}
+function toggleStepOpts() {
+  const opts = document.getElementById('stepOpts');
+  opts.classList.toggle('show');
+  document.getElementById('addStepBtn').textContent = opts.classList.contains('show') ? '✕ Cancel' : '+ Add step';
+}
+function addStep() {
+  const list = document.getElementById('steps-list');
+  const count = list.querySelectorAll('.estep').length + 1;
+  const div = document.createElement('div');
+  div.className = 'estep';
+  div.innerHTML = `<div class="estep-num">${count}</div><textarea class="estep-inp" rows="2" placeholder="Describe this step..."></textarea>`;
+  list.appendChild(div);
+  div.querySelector('textarea').focus();
+  document.getElementById('stepOpts').classList.remove('show');
+  document.getElementById('addStepBtn').textContent = '+ Add step';
+}
+</script>

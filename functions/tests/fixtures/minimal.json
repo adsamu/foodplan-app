@@ -1,0 +1,57 @@
+{
+  "userId": "test_user",
+  "startDate": "2025-05-19",
+  "settings": {
+    "schedule": {
+      "mealSlots": {
+        "MONDAY":    { "breakfast": false, "lunch": true, "dinner": true, "snackCount": -1 },
+        "TUESDAY":   { "breakfast": false, "lunch": true, "dinner": true, "snackCount": -1 },
+        "WEDNESDAY": { "breakfast": false, "lunch": true, "dinner": true, "snackCount": -1 },
+        "THURSDAY":  { "breakfast": false, "lunch": true, "dinner": true, "snackCount": -1 },
+        "FRIDAY":    { "breakfast": false, "lunch": true, "dinner": true, "snackCount": 1 },
+        "SATURDAY":  { "breakfast": false, "lunch": true, "dinner": true, "snackCount": 1 },
+        "SUNDAY":    { "breakfast": false, "lunch": false, "dinner": true, "snackCount": -1 }
+      },
+      "batchGroups": [
+        { "meal": "LUNCH", "days": [1,2,3,4,5], "batchNumber": 1 },
+        { "meal": "LUNCH", "days": [6],          "batchNumber": 2 }
+      ]
+    },
+    "goals": {
+      "kcalTarget": 1800,
+      "proteinTarget": 150,
+      "fatTarget": null,
+      "carbsTarget": 180,
+      "autoField": "FAT",
+      "maxKcalPerDay": 2200
+    },
+    "variety": {
+      "level": "BALANCED",
+      "lunchDinnerSharedRecency": true,
+      "breakfastSnackSharedRecency": false,
+      "proteinSourceVariety": true,
+      "perCategory": {
+        "LUNCH":     { "maxTimesPerWeek": null, "maxConsecutiveDays": null },
+        "DINNER":    { "maxTimesPerWeek": 2,    "maxConsecutiveDays": 2 },
+        "BREAKFAST": { "maxTimesPerWeek": null, "maxConsecutiveDays": null },
+        "SNACK":     { "maxTimesPerWeek": null,  "maxConsecutiveDays": null }
+      }
+    },
+    "proteinPowder": {
+      "ingredientId": "ing_protein_powder",
+      "name": "Whey Protein",
+      "proteinPer100g": 72,
+      "kcalPer100g": 354,
+      "autoFillGap": true
+    },
+    "diet": {
+      "dietTypes": [],
+      "allergies": [],
+      "excludedIngredientIds": [],
+      "preferredIngredientIds": [],
+      "dislikedIngredientIds": []
+    },
+    "rules": [],
+    "shopping": { "shoppingDays": [7], "intervalWeeks": 1 }
+  }
+}

@@ -1,0 +1,44 @@
+I think the tab version was best, no questions asked. I have some input though, can you create a new html mockup from it:
+
+
+* Schedule
+
+** Meals
+- Pick which days to include in the schedule.
+- Pick which meals on selected days to include, may be different depending on day. Lunch, dinner and breakfast are binary choices but snack may be any number. press one to increment, hold to reset to zero.
+
+** Batch Cooking
+- Pick which meals are batch cooked and for which days they batch are for. eg, batch coock lunch, mon, tue, .., sat, sun
+
+
+** Shopping
+- Pick a shopping day and the interval in weeks.
+
+* Goals
+
+** Targets
+- Caloric, NO per day goals only one target. The optimizer will try to reach this as an day average over a week 
+- Protein fat and carbs target, NO per day goals only one target. The optimizer will try to reach this as an day average over a week. It should be possible to only pick one macro, then the optimizer will only optimize for that.
+- Entering the targets will display a small piechart which shows the macrosplit in percentage
+- Max of Caloric, protein fat and carbs per day
+- Min of Caloric, protein fat and carbs per day
+
+** Protein Supplement
+- No protein power picked: Add protein powder, opens up the ingredient picker (same as when creating recipe, but only displaying ingredients with protein supplement type). 
+Supplement picked: display name, and stats like it currently does. pressing it makes it possible to change it.
+- toggle for Auto-fill protein gap
+- toggle for Low stock warning
+- Change or restock: when pressed opens a menu picking the number of grams in stock.
+
+* Diet
+
+This page is good, excep that the diet types should only include vegetarian, vegan, pescatarian, Keto. High protein, low carb etc are things you set in goals.
+
+* Rules
+** Active rules
+- This page is good, rules available: Diet min/max X times a week, ingredient min/max X times a week
+** Variety
+- days in a row: How many days in a row is it okay to plan the same meal? (batch cooking excluded)
+- Unique week: How many weeks should be different before circuling back?
+- No batch cooking option, this is moved to schedule tab
+

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FoodPlan — Meal Plan Mockup</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif; margin:0; padding:24px; background:#1e1e1e; }
+  .pw { display:flex; flex-wrap:wrap; gap:32px; justify-content:center; padding:24px 0; }
+  .ph-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .ph-title { color:#ccc; font-size:13px; font-weight:500; }
+  .ph { width:300px; height:640px; background:#fef7ff; border-radius:30px; border:7px solid #111; overflow:hidden; display:flex; flex-direction:column; font-family:-apple-system,BlinkMacSystemFont,'Roboto',sans-serif; position:relative; }
+  .sb { height:24px; display:flex; justify-content:space-between; align-items:center; padding:0 14px; font-size:11px; font-weight:600; color:#1d1b20; background:#fef7ff; flex-shrink:0; }
+  .tb { padding:8px 14px 4px; display:flex; align-items:center; justify-content:space-between; background:#fef7ff; flex-shrink:0; }
+  .tb h1 { font-size:20px; font-weight:500; color:#1d1b20; margin:0; }
+  .ibtn { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#49454f; font-size:15px; cursor:pointer; }
+  .view-toggle { display:flex; background:#ece6f0; border-radius:20px; padding:3px; margin:6px 14px 10px; flex-shrink:0; }
+  .vt-btn { flex:1; padding:6px; text-align:center; font-size:12px; font-weight:500; border-radius:16px; cursor:pointer; color:#49454f; transition:all 0.2s; }
+  .vt-btn.active { background:#6750a4; color:white; }
+
+  .stats-card { margin:0 14px 10px; background:#f3edf7; border-radius:16px; overflow:hidden; flex-shrink:0; }
+  .stats-collapsed { padding:12px 14px; display:flex; align-items:center; gap:12px; cursor:pointer; }
+  .pie-mini { width:48px; height:48px; flex-shrink:0; }
+  .stats-summary { flex:1; }
+  .stats-kcal { font-size:18px; font-weight:600; color:#21005d; }
+  .stats-sub { font-size:11px; color:#79747e; margin-top:1px; }
+  .stats-pills { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+  .spill { padding:3px 8px; border-radius:6px; font-size:10px; font-weight:500; }
+  .spill-p { background:#eaddff; color:#21005d; }
+  .spill-f { background:#ffd8e4; color:#31111d; }
+  .spill-c { background:#d8f5e4; color:#0a3d22; }
+  .expand-icon { color:#79747e; font-size:14px; transition:transform 0.2s; }
+  .expand-icon.open { transform:rotate(180deg); }
+  .stats-expanded { padding:0 14px 14px; display:none; }
+  .stats-expanded.show { display:block; }
+  .macro-bars { margin-bottom:12px; }
+  .mbar-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .mbar-lbl { font-size:11px; color:#49454f; width:52px; }
+  .mbar-track { flex:1; height:6px; background:#e8def8; border-radius:3px; overflow:hidden; }
+  .mbar-fill { height:100%; border-radius:3px; }
+  .mbar-val { font-size:11px; color:#49454f; width:36px; text-align:right; }
+  .stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .stat-box { background:#eaddff; border-radius:10px; padding:8px 10px; }
+  .stat-box-val { font-size:15px; font-weight:600; color:#21005d; }
+  .stat-box-lbl { font-size:10px; color:#49454f; margin-top:2px; }
+  .stat-box.warn { background:#fff0c2; }
+  .stat-box.warn .stat-box-val { color:#7d4e00; }
+  .stat-box.shop { background:#d8f5e4; }
+  .stat-box.shop .stat-box-val { color:#0a3d22; }
+
+  .cnt { flex:1; overflow-y:auto; padding:0 14px 8px; }
+  .cnt::-webkit-scrollbar { display:none; }
+
+  .day-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; padding:0 2px; }
+  .day-nav { font-size:18px; color:#49454f; cursor:pointer; padding:4px 8px; }
+  .day-title { font-size:14px; font-weight:500; color:#1d1b20; text-align:center; }
+  .day-sub { font-size:11px; color:#79747e; text-align:center; }
+
+  .meal-slot { background:#f3edf7; border-radius:14px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:10px; cursor:pointer; }
+  .meal-slot.high-cal { border-left:3px solid #e8a000; }
+  .ms-icon { width:40px; height:40px; border-radius:10px; background:#eaddff; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .ms-info { flex:1; min-width:0; }
+  .ms-type { font-size:10px; color:#79747e; text-transform:uppercase; letter-spacing:0.6px; }
+  .ms-name { font-size:14px; font-weight:500; color:#1d1b20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+  .ms-macros { font-size:11px; color:#79747e; margin-top:2px; }
+  .ms-kcal { font-size:13px; font-weight:600; color:#49454f; }
+  .powder-row { background:#e8def8; border-radius:12px; padding:10px 14px; margin-bottom:8px; display:flex; align-items:center; gap:10px; }
+  .powder-icon { font-size:20px; }
+  .powder-info { flex:1; }
+  .powder-title { font-size:13px; font-weight:500; color:#21005d; }
+  .powder-sub { font-size:11px; color:#49454f; margin-top:1px; }
+
+  .week-scroll { display:flex; flex-direction:column; gap:6px; }
+  .week-day-row { background:#f3edf7; border-radius:12px; padding:10px 12px; cursor:pointer; }
+  .week-day-row.today { border:1.5px solid #6750a4; }
+  .week-day-row.high-cal { border-left:3px solid #e8a000; }
+  .week-day-row.shop-day { border-left:3px solid #1d9e75; }
+  .wd-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .wd-date { font-size:13px; font-weight:500; color:#1d1b20; }
+  .wd-kcal { font-size:12px; font-weight:600; color:#49454f; }
+  .wd-meals { display:flex; gap:5px; flex-wrap:wrap; }
+  .wd-meal { font-size:11px; background:#eaddff; color:#21005d; padding:2px 8px; border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:90px; }
+  .wd-badge { font-size:10px; padding:2px 7px; border-radius:5px; font-weight:500; }
+  .wd-shop { background:#d8f5e4; color:#0a3d22; }
+  .wd-hcal { background:#fff0c2; color:#7d4e00; }
+  .wd-bar { height:4px; background:#e8def8; border-radius:2px; margin-top:8px; overflow:hidden; }
+  .wd-bar-fill { height:100%; background:#6750a4; border-radius:2px; }
+
+  .month-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .month-nav { font-size:18px; color:#49454f; cursor:pointer; padding:4px 8px; }
+  .month-title { font-size:14px; font-weight:500; color:#1d1b20; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; margin-bottom:10px; }
+  .cal-dow { font-size:9px; color:#79747e; text-align:center; padding-bottom:4px; font-weight:600; }
+  .cal-day { aspect-ratio:1; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; position:relative; font-size:11px; color:#1d1b20; background:#f3edf7; }
+  .cal-day.empty { background:transparent; cursor:default; }
+  .cal-day.today { background:#6750a4; color:white; font-weight:600; }
+  .cal-day.selected { background:#eaddff; color:#21005d; font-weight:600; }
+  .cal-day.high-cal::after { content:''; position:absolute; bottom:3px; width:4px; height:4px; border-radius:50%; background:#e8a000; }
+  .cal-day.shop-day::after { content:''; position:absolute; bottom:3px; width:4px; height:4px; border-radius:50%; background:#1d9e75; }
+  .cal-day.today::after { background:white; }
+  .cal-legend { display:flex; gap:12px; margin-bottom:10px; }
+  .leg-item { display:flex; align-items:center; gap:5px; font-size:10px; color:#49454f; }
+  .leg-dot { width:8px; height:8px; border-radius:50%; }
+
+  .bnav { height:68px; background:#f3edf7; display:flex; padding:8px; flex-shrink:0; }
+  .ni { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; cursor:pointer; }
+  .nic { width:52px; height:28px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:14px; color:#79747e; }
+  .ni.active .nic { background:#e8def8; }
+  .nlbl { font-size:10px; color:#79747e; font-weight:500; }
+  .ni.active .nlbl { color:#1d1b20; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="pw">
+
+  <!-- DAY VIEW -->
+  <div class="ph-wrap">
+    <div class="ph-title">Day view</div>
+    <div class="ph">
+      <div class="sb"><span>09:41</span><span>100%</span></div>
+      <div class="tb"><h1>Meal Plan</h1><div class="ibtn">&#9881;</div></div>
+      <div class="view-toggle">
+        <div class="vt-btn active">Day</div>
+        <div class="vt-btn">Week</div>
+        <div class="vt-btn">Month</div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-collapsed" onclick="toggleStats('d')">
+          <svg class="pie-mini" viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#eaddff" stroke-width="8"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#6750a4" stroke-width="8" stroke-dasharray="75.4 50.3" stroke-dashoffset="31.4" transform="rotate(-90 24 24)"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#ffd8e4" stroke-width="8" stroke-dasharray="40.2 85.5" stroke-dashoffset="-44" transform="rotate(-90 24 24)"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#d8f5e4" stroke-width="8" stroke-dasharray="10.1 115.6" stroke-dashoffset="-84.2" transform="rotate(-90 24 24)"/>
+          </svg>
+          <div class="stats-summary">
+            <div class="stats-kcal">1 289 kcal</div>
+            <div class="stats-sub">Tuesday, 21 Apr · Weekday</div>
+            <div class="stats-pills">
+              <span class="spill spill-p">120g protein</span>
+              <span class="spill spill-f">24g fat</span>
+              <span class="spill spill-c">121g carbs</span>
+            </div>
+          </div>
+          <div class="expand-icon" id="icon-d">&#8964;</div>
+        </div>
+        <div class="stats-expanded" id="exp-d">
+          <div class="macro-bars">
+            <div class="mbar-row">
+              <span class="mbar-lbl">Protein</span>
+              <div class="mbar-track"><div class="mbar-fill" style="width:60%;background:#6750a4;"></div></div>
+              <span class="mbar-val">120g</span>
+            </div>
+            <div class="mbar-row">
+              <span class="mbar-lbl">Fat</span>
+              <div class="mbar-track"><div class="mbar-fill" style="width:30%;background:#d4537e;"></div></div>
+              <span class="mbar-val">24g</span>
+            </div>
+            <div class="mbar-row">
+              <span class="mbar-lbl">Carbs</span>
+              <div class="mbar-track"><div class="mbar-fill" style="width:38%;background:#1d9e75;"></div></div>
+              <span class="mbar-val">121g</span>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-box shop">
+              <div class="stat-box-val">2 days</div>
+              <div class="stat-box-lbl">Until shopping</div>
+            </div>
+            <div class="stat-box warn">
+              <div class="stat-box-val">~3 days</div>
+              <div class="stat-box-lbl">Protein powder left</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cnt">
+        <div class="day-header">
+          <div class="day-nav">&#8249;</div>
+          <div>
+            <div class="day-title">Tuesday, 21 April</div>
+            <div class="day-sub">Week 17 · Weekday · 1 350 kcal target</div>
+          </div>
+          <div class="day-nav">&#8250;</div>
+        </div>
+        <div class="meal-slot">
+          <div class="ms-icon">&#127837;</div>
+          <div class="ms-info">
+            <div class="ms-type">Lunch</div>
+            <div class="ms-name">Buckwheat chicken</div>
+            <div class="ms-macros">43g P · 9g F · 65g C</div>
+          </div>
+          <div class="ms-kcal">524</div>
+        </div>
+        <div class="meal-slot">
+          <div class="ms-icon">&#127869;</div>
+          <div class="ms-info">
+            <div class="ms-type">Dinner</div>
+            <div class="ms-name">Tuna with rice</div>
+            <div class="ms-macros">55g P · 15g F · 56g C</div>
+          </div>
+          <div class="ms-kcal">678</div>
+        </div>
+        <div class="powder-row">
+          <div class="powder-icon">&#128170;</div>
+          <div class="powder-info">
+            <div class="powder-title">Core Protein Pro — 24.5g</div>
+            <div class="powder-sub">+22g protein · +87 kcal to hit goal</div>
+          </div>
+        </div>
+      </div>
+      <div class="bnav">
+        <div class="ni active"><div class="nic">&#128197;</div><div class="nlbl">Meal Plan</div></div>
+        <div class="ni"><div class="nic">&#128214;</div><div class="nlbl">Recipes</div></div>
+        <div class="ni"><div class="nic">&#128722;</div><div class="nlbl">Shopping</div></div>
+        <div class="ni"><div class="nic">&#128100;</div><div class="nlbl">Profile</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEEK VIEW -->
+  <div class="ph-wrap">
+    <div class="ph-title">Week view</div>
+    <div class="ph">
+      <div class="sb"><span>09:41</span><span>100%</span></div>
+      <div class="tb"><h1>Meal Plan</h1><div class="ibtn">&#9881;</div></div>
+      <div class="view-toggle">
+        <div class="vt-btn">Day</div>
+        <div class="vt-btn active">Week</div>
+        <div class="vt-btn">Month</div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-collapsed" onclick="toggleStats('w')">
+          <svg class="pie-mini" viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#eaddff" stroke-width="8"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#6750a4" stroke-width="8" stroke-dasharray="72 53.7" stroke-dashoffset="31.4" transform="rotate(-90 24 24)"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#ffd8e4" stroke-width="8" stroke-dasharray="38 87.7" stroke-dashoffset="-40.6" transform="rotate(-90 24 24)"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#d8f5e4" stroke-width="8" stroke-dasharray="15.7 109.9" stroke-dashoffset="-78.6" transform="rotate(-90 24 24)"/>
+          </svg>
+          <div class="stats-summary">
+            <div class="stats-kcal">~1 412 kcal/day</div>
+            <div class="stats-sub">Week 17 · 20–26 Apr</div>
+            <div class="stats-pills">
+              <span class="spill spill-p">avg 122g P</span>
+              <span class="spill spill-f">avg 31g F</span>
+              <span class="spill spill-c">avg 128g C</span>
+            </div>
+          </div>
+          <div class="expand-icon" id="icon-w">&#8964;</div>
+        </div>
+        <div class="stats-expanded" id="exp-w">
+          <div class="stats-grid">
+            <div class="stat-box shop">
+              <div class="stat-box-val">2 days</div>
+              <div class="stat-box-lbl">Until shopping</div>
+            </div>
+            <div class="stat-box warn">
+              <div class="stat-box-val">~3 days</div>
+              <div class="stat-box-lbl">Protein powder left</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-val">2 high-cal</div>
+              <div class="stat-box-lbl">Days this week</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-val">9 800 kcal</div>
+              <div class="stat-box-lbl">Week total</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cnt">
+        <div class="week-scroll">
+          <div class="week-day-row today">
+            <div class="wd-top">
+              <span class="wd-date">Tue 21 · Today</span>
+              <span class="wd-kcal">1 289 kcal</span>
+            </div>
+            <div class="wd-meals">
+              <span class="wd-meal">Buckwheat chicken</span>
+              <span class="wd-meal">Tuna w. rice</span>
+            </div>
+            <div class="wd-bar"><div class="wd-bar-fill" style="width:96%;"></div></div>
+          </div>
+          <div class="week-day-row">
+            <div class="wd-top">
+              <span class="wd-date">Wed 22</span>
+              <span class="wd-kcal">1 289 kcal</span>
+            </div>
+            <div class="wd-meals">
+              <span class="wd-meal">Buckwheat chicken</span>
+              <span class="wd-meal">Tuna w. rice</span>
+            </div>
+            <div class="wd-bar"><div class="wd-bar-fill" style="width:96%;"></div></div>
+          </div>
+          <div class="week-day-row">
+            <div class="wd-top">
+              <span class="wd-date">Thu 23</span>
+              <span class="wd-kcal">1 289 kcal</span>
+            </div>
+            <div class="wd-meals">
+              <span class="wd-meal">Buckwheat chicken</span>
+              <span class="wd-meal">Tuna w. rice</span>
+            </div>
+            <div class="wd-bar"><div class="wd-bar-fill" style="width:96%;"></div></div>
+          </div>
+          <div class="week-day-row high-cal">
+            <div class="wd-top">
+              <span class="wd-date">Fri 24</span>
+              <div style="display:flex;gap:5px;align-items:center;">
+                <span class="wd-badge wd-hcal">High cal</span>
+                <span class="wd-kcal">1 539 kcal</span>
+              </div>
+            </div>
+            <div class="wd-meals">
+              <span class="wd-meal">Buckwheat chicken</span>
+              <span class="wd-meal">Quesadillas</span>
+              <span class="wd-meal">Muesli</span>
+            </div>
+            <div class="wd-bar"><div class="wd-bar-fill" style="width:91%;background:#e8a000;"></div></div>
+          </div>
+          <div class="week-day-row high-cal">
+            <div class="wd-top">
+              <span class="wd-date">Sat 25</span>
+              <div style="display:flex;gap:5px;align-items:center;">
+                <span class="wd-badge wd-hcal">High cal</span>
+                <span class="wd-kcal">1 539 kcal</span>
+              </div>
+            </div>
+            <div class="wd-meals">
+              <span class="wd-meal">Buckwheat chicken</span>
+              <span class="wd-meal">Quesadillas</span>
+              <span class="wd-meal">Muesli</span>
+            </div>
+            <div class="wd-bar"><div class="wd-bar-fill" style="width:91%;background:#e8a000;"></div></div>
+          </div>
+          <div class="week-day-row shop-day">
+            <div class="wd-top">
+              <span class="wd-date">Sun 26</span>
+              <div style="display:flex;gap:5px;align-items:center;">
+                <span class="wd-badge wd-shop">Shopping</span>
+                <span class="wd-kcal">1 257 kcal</span>
+              </div>
+            </div>
+            <div class="wd-meals">
+              <span class="wd-meal">Buckwheat chicken</span>
+              <span class="wd-meal">Quesadillas</span>
+            </div>
+            <div class="wd-bar"><div class="wd-bar-fill" style="width:93%;background:#1d9e75;"></div></div>
+          </div>
+        </div>
+        <div style="height:12px;"></div>
+      </div>
+      <div class="bnav">
+        <div class="ni active"><div class="nic">&#128197;</div><div class="nlbl">Meal Plan</div></div>
+        <div class="ni"><div class="nic">&#128214;</div><div class="nlbl">Recipes</div></div>
+        <div class="ni"><div class="nic">&#128722;</div><div class="nlbl">Shopping</div></div>
+        <div class="ni"><div class="nic">&#128100;</div><div class="nlbl">Profile</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MONTH VIEW -->
+  <div class="ph-wrap">
+    <div class="ph-title">Month view</div>
+    <div class="ph">
+      <div class="sb"><span>09:41</span><span>100%</span></div>
+      <div class="tb"><h1>Meal Plan</h1><div class="ibtn">&#9881;</div></div>
+      <div class="view-toggle">
+        <div class="vt-btn">Day</div>
+        <div class="vt-btn">Week</div>
+        <div class="vt-btn active">Month</div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-collapsed" onclick="toggleStats('m')">
+          <svg class="pie-mini" viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#eaddff" stroke-width="8"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#6750a4" stroke-width="8" stroke-dasharray="72 53.7" stroke-dashoffset="31.4" transform="rotate(-90 24 24)"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#ffd8e4" stroke-width="8" stroke-dasharray="38 87.7" stroke-dashoffset="-40.6" transform="rotate(-90 24 24)"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="#d8f5e4" stroke-width="8" stroke-dasharray="15.7 109.9" stroke-dashoffset="-78.6" transform="rotate(-90 24 24)"/>
+          </svg>
+          <div class="stats-summary">
+            <div class="stats-kcal">~1 487 kcal/day</div>
+            <div class="stats-sub">April 2026 · 30 days planned</div>
+            <div class="stats-pills">
+              <span class="spill spill-p">avg 125g P</span>
+              <span class="spill spill-f">avg 48g F</span>
+              <span class="spill spill-c">avg 128g C</span>
+            </div>
+          </div>
+          <div class="expand-icon" id="icon-m">&#8964;</div>
+        </div>
+        <div class="stats-expanded" id="exp-m">
+          <div class="stats-grid">
+            <div class="stat-box shop">
+              <div class="stat-box-val">4 shops</div>
+              <div class="stat-box-lbl">This month</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-val">8 high-cal</div>
+              <div class="stat-box-lbl">Days this month</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-val">44 610</div>
+              <div class="stat-box-lbl">Month kcal total</div>
+            </div>
+            <div class="stat-box warn">
+              <div class="stat-box-val">~3 days</div>
+              <div class="stat-box-lbl">Protein powder left</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cnt">
+        <div class="month-header">
+          <div class="month-nav">&#8249;</div>
+          <div class="month-title">April 2026</div>
+          <div class="month-nav">&#8250;</div>
+        </div>
+        <div class="cal-grid">
+          <div class="cal-dow">M</div><div class="cal-dow">T</div><div class="cal-dow">W</div>
+          <div class="cal-dow">T</div><div class="cal-dow">F</div><div class="cal-dow">S</div><div class="cal-dow">S</div>
+          <div class="cal-day empty"></div><div class="cal-day empty"></div><div class="cal-day empty"></div>
+          <div class="cal-day">1</div><div class="cal-day high-cal">2</div><div class="cal-day high-cal">3</div><div class="cal-day shop-day">4</div>
+          <div class="cal-day">5</div><div class="cal-day">6</div><div class="cal-day">7</div>
+          <div class="cal-day">8</div><div class="cal-day high-cal">9</div><div class="cal-day high-cal">10</div><div class="cal-day shop-day">11</div>
+          <div class="cal-day">12</div><div class="cal-day">13</div><div class="cal-day">14</div>
+          <div class="cal-day">15</div><div class="cal-day high-cal">16</div><div class="cal-day high-cal">17</div><div class="cal-day shop-day">18</div>
+          <div class="cal-day">19</div><div class="cal-day">20</div>
+          <div class="cal-day today" onclick="selectDay(this)">21</div>
+          <div class="cal-day" onclick="selectDay(this)">22</div>
+          <div class="cal-day" onclick="selectDay(this)">23</div>
+          <div class="cal-day high-cal" onclick="selectDay(this)">24</div>
+          <div class="cal-day high-cal" onclick="selectDay(this)">25</div>
+          <div class="cal-day shop-day" onclick="selectDay(this)">26</div>
+          <div class="cal-day" onclick="selectDay(this)">27</div>
+          <div class="cal-day" onclick="selectDay(this)">28</div>
+          <div class="cal-day" onclick="selectDay(this)">29</div>
+          <div class="cal-day" onclick="selectDay(this)">30</div>
+          <div class="cal-day empty"></div><div class="cal-day empty"></div><div class="cal-day empty"></div>
+        </div>
+        <div class="cal-legend">
+          <div class="leg-item"><div class="leg-dot" style="background:#e8a000;"></div>High calorie</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#1d9e75;"></div>Shopping day</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#6750a4;"></div>Today</div>
+        </div>
+      </div>
+      <div class="bnav">
+        <div class="ni active"><div class="nic">&#128197;</div><div class="nlbl">Meal Plan</div></div>
+        <div class="ni"><div class="nic">&#128214;</div><div class="nlbl">Recipes</div></div>
+        <div class="ni"><div class="nic">&#128722;</div><div class="nlbl">Shopping</div></div>
+        <div class="ni"><div class="nic">&#128100;</div><div class="nlbl">Profile</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleStats(id) {
+  const exp = document.getElementById('exp-' + id);
+  const icon = document.getElementById('icon-' + id);
+  exp.classList.toggle('show');
+  icon.classList.toggle('open');
+}
+function selectDay(el) {
+  el.closest('.cal-grid').querySelectorAll('.cal-day:not(.empty)').forEach(d => {
+    if (!d.classList.contains('today')) d.classList.remove('selected');
+  });
+  el.classList.toggle('selected');
+}
+</script>
+</body>
+</html>

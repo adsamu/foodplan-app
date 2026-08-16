@@ -17,7 +17,7 @@ object FirebaseModule {
 
     @Provides
     @Singleton
-    fun provideFirebaseFunctions(): FirebaseFunctions = FirebaseFunctions.getInstance()
+    fun provideFirebaseFunctions(): FirebaseFunctions = FirebaseFunctions.getInstance("europe-north1")
 
     @Provides
     @Singleton

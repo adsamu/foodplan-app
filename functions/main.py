@@ -9,13 +9,18 @@ plan back to Firestore.
 from __future__ import annotations
 
 import datetime
+import logging
+import resource
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 import firebase_admin
 from firebase_admin import firestore as admin_firestore
-from firebase_functions import https_fn
+from firebase_functions import https_fn, options
 from ortools.sat.python import cp_model
 
 # ---------------------------------------------------------------------------
@@ -170,6 +175,7 @@ DAY_NAMES = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY",
 # ISO weekday 1=Mon..7=Sun → 0-based index
 ISO_TO_IDX = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6}
 IDX_TO_ISO = {v: k for k, v in ISO_TO_IDX.items()}
+DAY_NAME_TO_ISO = {name: iso for iso, name in enumerate(DAY_NAMES, start=1)}
 
 RECENCY_WINDOW = {"FLEXIBLE": 14, "BALANCED": 28, "STRICT": 42}
 RECENCY_WEEKS  = {"FLEXIBLE": 2,  "BALANCED": 4,  "STRICT": 6}
@@ -180,6 +186,35 @@ POWDER_SCALE = 10     # integer units of 0.1g
 POWDER_MAX_G = 100    # hard max per day
 
 MEAL_TYPES = ["BREAKFAST", "LUNCH", "DINNER", "SNACK"]
+
+# Recency penalty multipliers by star rating.
+# High stars → multiplier < 1 → penalty shrinks → recipe appears more often.
+# Low stars  → multiplier > 1 → penalty grows  → recipe fades into background.
+# Stars 1 and isExcluded are filtered out before solve() — not handled here.
+RATING_PENALTY_MULTIPLIERS: dict[int, float] = {
+    5: 0.2,
+    4: 0.5,
+    3: 1.0,
+    2: 2.0,
+}
+
+
+# ---------------------------------------------------------------------------
+# Observability helpers
+# ---------------------------------------------------------------------------
+
+def _rss_mb() -> float:
+    """Current resident set size in MB. Reads /proc/self/status on Linux;
+    falls back to ru_maxrss (peak, not current) on other platforms."""
+    try:
+        with open("/proc/self/status") as fh:
+            for line in fh:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024.0
+    except OSError:
+        pass
+    scale = 1024 if resource.getpagesize() == 4096 else 1
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / scale
 
 
 # ---------------------------------------------------------------------------
@@ -242,52 +277,48 @@ def _parse_variety_per_category(raw: dict | None) -> VarietyPerCategory:
 
 
 def _parse_settings(data: dict, ratings: dict[str, RecipeRating]) -> Settings:
-    schedule = data.get("schedule", {})
-    raw_slots = schedule.get("mealSlots", {})
-    meal_slots: dict[str, DayMealConfig] = {}
-    for day, cfg in raw_slots.items():
-        meal_slots[day] = DayMealConfig(
-            breakfast=bool(cfg.get("breakfast", False)),
-            lunch=bool(cfg.get("lunch", False)),
-            dinner=bool(cfg.get("dinner", False)),
-            snack_count=int(cfg.get("snackCount", 0)),
-        )
-
-    batch_groups = [
-        BatchGroup(
-            meal=bg["meal"],
-            days=list(bg["days"]),
-            batch_number=int(bg["batchNumber"]),
-        )
-        for bg in schedule.get("batchGroups", [])
-    ]
+    # Support both new simplified schema and legacy schema (schedule.mealSlots).
+    # New schema uses top-level `days` and `batchGroups`; legacy wraps them in `schedule`.
+    if "days" in data:
+        meal_slots = _parse_meal_slots_new(data)
+        batch_groups = _parse_batch_groups_new(data)
+    else:
+        meal_slots = _parse_meal_slots_legacy(data)
+        batch_groups = _parse_batch_groups_legacy(data)
 
     raw_goals = data.get("goals", {})
     kcal = float(raw_goals.get("kcalTarget", 2000))
     protein = raw_goals.get("proteinTarget")
     fat     = raw_goals.get("fatTarget")
     carbs   = raw_goals.get("carbsTarget")
-    auto_field = raw_goals.get("autoField", "FAT")
-    # Derive the auto field
-    protein_kcal = (float(protein) * 4) if protein is not None else None
-    fat_kcal     = (float(fat) * 9)     if fat     is not None else None
-    carbs_kcal   = (float(carbs) * 4)   if carbs   is not None else None
 
-    if auto_field == "PROTEIN":
-        others = (fat_kcal or 0) + (carbs_kcal or 0)
-        protein = (kcal - others) / 4
-    elif auto_field == "FAT":
-        others = (protein_kcal or 0) + (carbs_kcal or 0)
-        fat = (kcal - others) / 9
-    else:  # CARBS
-        others = (protein_kcal or 0) + (fat_kcal or 0)
-        carbs = (kcal - others) / 4
+    # Legacy: auto-derive one macro from the others via autoField.
+    # New schema: all four are provided explicitly; derive any missing ones from residual.
+    auto_field = raw_goals.get("autoField")
+    if auto_field:
+        protein_kcal = (float(protein) * 4) if protein is not None else None
+        fat_kcal     = (float(fat) * 9)     if fat     is not None else None
+        carbs_kcal   = (float(carbs) * 4)   if carbs   is not None else None
+        if auto_field == "PROTEIN":
+            protein = (kcal - (fat_kcal or 0) - (carbs_kcal or 0)) / 4
+        elif auto_field == "FAT":
+            fat = (kcal - (protein_kcal or 0) - (carbs_kcal or 0)) / 9
+        else:
+            carbs = (kcal - (protein_kcal or 0) - (fat_kcal or 0)) / 4
+
+    if protein is None:
+        protein = max(0.0, (kcal - (fat or 0) * 9 - (carbs or 0) * 4) / 4)
+    if fat is None:
+        fat = max(0.0, (kcal - (protein or 0) * 4 - (carbs or 0) * 4) / 9)
+    if carbs is None:
+        carbs = max(0.0, (kcal - (protein or 0) * 4 - (fat or 0) * 9) / 4)
 
     goals = Goals(
         kcal_target=kcal,
         protein_target=float(protein),
         fat_target=float(fat),
         carbs_target=float(carbs),
+        # Per-day bounds: legacy only; new schema uses implicit ±5% for variable-snack days
         min_kcal=raw_goals.get("minKcalPerDay"),
         max_kcal=raw_goals.get("maxKcalPerDay"),
         min_protein=raw_goals.get("minProteinPerDay"),
@@ -298,31 +329,48 @@ def _parse_settings(data: dict, ratings: dict[str, RecipeRating]) -> Settings:
         max_carbs=raw_goals.get("maxCarbsPerDay"),
     )
 
-    raw_var = data.get("variety", {})
-    per_cat_raw = raw_var.get("perCategory", {})
-    variety = VarietyConfig(
-        level=raw_var.get("level", "BALANCED"),
-        lunch_dinner_shared_recency=bool(raw_var.get("lunchDinnerSharedRecency", False)),
-        breakfast_snack_shared_recency=bool(raw_var.get("breakfastSnackSharedRecency", False)),
-        protein_source_variety=bool(raw_var.get("proteinSourceVariety", False)),
-        per_category={k: _parse_variety_per_category(v) for k, v in per_cat_raw.items()},
-    )
+    # Variety: new schema always uses BALANCED with sensible defaults.
+    # Legacy schema reads full variety config from data.
+    if "days" in data:
+        variety = VarietyConfig(
+            level="BALANCED",
+            lunch_dinner_shared_recency=True,
+            breakfast_snack_shared_recency=False,
+            protein_source_variety=True,
+            per_category={
+                "BREAKFAST": VarietyPerCategory(None, None),
+                "LUNCH":     VarietyPerCategory(None, None),
+                "DINNER":    VarietyPerCategory(None, None),
+                "SNACK":     VarietyPerCategory(None, None),
+            },
+        )
+    else:
+        raw_var = data.get("variety", {})
+        per_cat_raw = raw_var.get("perCategory", {})
+        variety = VarietyConfig(
+            level=raw_var.get("level", "BALANCED"),
+            lunch_dinner_shared_recency=bool(raw_var.get("lunchDinnerSharedRecency", False)),
+            breakfast_snack_shared_recency=bool(raw_var.get("breakfastSnackSharedRecency", False)),
+            protein_source_variety=bool(raw_var.get("proteinSourceVariety", False)),
+            per_category={k: _parse_variety_per_category(v) for k, v in per_cat_raw.items()},
+        )
 
     raw_pp = data.get("proteinPowder")
     protein_powder = None
     if raw_pp:
-        protein_powder = ProteinPowder(
-            ingredient_id=raw_pp.get("ingredientId", ""),
-            name=raw_pp.get("name", ""),
-            protein_per_100g=float(raw_pp.get("proteinPer100g", 0)),
-            kcal_per_100g=float(raw_pp.get("kcalPer100g", 0)),
-            auto_fill_gap=bool(raw_pp.get("autoFillGap", False)),
-        )
+        enabled = bool(raw_pp.get("enabled", raw_pp.get("autoFillGap", False)))
+        if enabled:
+            protein_powder = ProteinPowder(
+                ingredient_id=raw_pp.get("ingredientId", ""),
+                name=raw_pp.get("name", ""),
+                protein_per_100g=float(raw_pp.get("proteinPer100g", 0)),
+                kcal_per_100g=float(raw_pp.get("kcalPer100g", 0)),
+                auto_fill_gap=True,
+            )
 
-    raw_diet = data.get("diet", {})
+    raw_diet = data.get("dietaryRestrictions", data.get("diet", {}))
     excluded_ingredient_ids = list(raw_diet.get("excludedIngredientIds", []))
 
-    # Build excluded recipe set from ratings
     excluded_recipe_ids = {
         r.recipe_id for r in ratings.values()
         if r.is_excluded or r.stars == 1
@@ -349,6 +397,65 @@ def _parse_settings(data: dict, ratings: dict[str, RecipeRating]) -> Settings:
         excluded_recipe_ids=excluded_recipe_ids,
         rules=rules,
     )
+
+
+def _parse_meal_slots_new(data: dict) -> dict[str, DayMealConfig]:
+    """Parse per-day meal config from the new simplified schema (data.days)."""
+    slots: dict[str, DayMealConfig] = {}
+    for day_name, cfg in data.get("days", {}).items():
+        snacks = bool(cfg.get("snacks", False))
+        slots[day_name] = DayMealConfig(
+            breakfast=bool(cfg.get("breakfast", False)),
+            lunch=bool(cfg.get("lunch", False)),
+            dinner=bool(cfg.get("dinner", False)),
+            snack_count=-1 if snacks else 0,
+        )
+    return slots
+
+
+def _parse_meal_slots_legacy(data: dict) -> dict[str, DayMealConfig]:
+    """Parse per-day meal config from the legacy schema (data.schedule.mealSlots)."""
+    slots: dict[str, DayMealConfig] = {}
+    raw_slots = data.get("schedule", {}).get("mealSlots", {})
+    for day, cfg in raw_slots.items():
+        slots[day] = DayMealConfig(
+            breakfast=bool(cfg.get("breakfast", False)),
+            lunch=bool(cfg.get("lunch", False)),
+            dinner=bool(cfg.get("dinner", False)),
+            snack_count=int(cfg.get("snackCount", 0)),
+        )
+    return slots
+
+
+def _parse_batch_groups_new(data: dict) -> list[BatchGroup]:
+    """Parse batch groups from new schema (data.batchGroups with day names).
+
+    Auto-assigns batch_number per meal type so each group of days gets a
+    unique number within that meal type (required by the optimizer).
+    """
+    groups: list[BatchGroup] = []
+    meal_counters: dict[str, int] = {}
+    for bg in data.get("batchGroups", []):
+        meal = bg["meal"]
+        day_names: list[str] = bg["days"]
+        iso_days = [DAY_NAME_TO_ISO[d] for d in day_names if d in DAY_NAME_TO_ISO]
+        if not iso_days:
+            continue
+        meal_counters[meal] = meal_counters.get(meal, 0) + 1
+        groups.append(BatchGroup(meal=meal, days=iso_days, batch_number=meal_counters[meal]))
+    return groups
+
+
+def _parse_batch_groups_legacy(data: dict) -> list[BatchGroup]:
+    """Parse batch groups from legacy schema (data.schedule.batchGroups with ISO integers)."""
+    return [
+        BatchGroup(
+            meal=bg["meal"],
+            days=list(bg["days"]),
+            batch_number=int(bg["batchNumber"]),
+        )
+        for bg in data.get("schedule", {}).get("batchGroups", [])
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +718,13 @@ def compute_recency_penalty(
     return max(0.0, 1.0 - days_ago / window_days)
 
 
+def _apply_rating_multiplier(pen: float, rating: "RecipeRating | None") -> float:
+    """Scale a recency penalty by the user's star rating for the recipe."""
+    if pen == 0.0 or rating is None or rating.stars is None:
+        return pen
+    return pen * RATING_PENALTY_MULTIPLIERS.get(rating.stars, 1.0)
+
+
 # ---------------------------------------------------------------------------
 # CP-SAT Model
 # ---------------------------------------------------------------------------
@@ -627,14 +741,26 @@ def solve(
     history_index: dict[tuple[str, str], datetime.date],
     start_date: datetime.date,
     ingredients_raw: dict[str, dict] | None = None,
+    pinned_meals: dict[tuple[int, str, str], str] | None = None,
+    _relax_bounds: bool = False,
 ) -> dict:
     """
     Build and solve the CP-SAT model. Returns a dict matching the Firestore
-    mealPlans schema or raises an exception if INFEASIBLE.
+    mealPlans schema.  On INFEASIBLE the solver automatically retries without
+    per-day hard kcal/macro bounds; the returned plan is tagged
+    ``"approximate": True`` so callers can surface a warning to the user.
     """
+    t_solve_start = time.perf_counter()
     model = cp_model.CpModel()
     variety = settings.variety
     goals = settings.goals
+    # Implicit per-day kcal bounds for variable-snack days, derived from kcal_target:
+    #   ceiling = target × 1.05  (caps snack count; primary performance lever)
+    #   floor   = target × 0.95 × (active_meal_slots / 3)  (scales down for partial days)
+    # Scaling the floor by the active meal fraction avoids infeasibility on dinner-only
+    # or other partial days where meals alone can't reach a full-day floor.
+    # Explicit user values always override the derived ones.
+    _kcal_ceil  = goals.max_kcal if goals.max_kcal is not None else goals.kcal_target * 1.05
 
     # -----------------------------------------------------------------------
     # Day / schedule setup
@@ -672,10 +798,21 @@ def solve(
 
     snack_pool_size = len(pool["SNACK"])
 
+    logger.info(
+        "optimizer.solve pool_sizes=%s active_days=%d batch_groups=%d",
+        {mt: len(v) for mt, v in pool.items()},
+        n_active,
+        len(settings.batch_groups),
+    )
+
     # -----------------------------------------------------------------------
     # Decision variables: x[day_idx][meal_type][recipe_id] in {0,1}
     # -----------------------------------------------------------------------
     x: dict[tuple[int, str, str], cp_model.IntVar] = {}
+    # Snack variables use a simpler selection model: one bool per (day, recipe).
+    # No slots, no NULL sentinels — eliminates slot-permutation symmetry that
+    # caused exponential blowup in CP-SAT.
+    x_snack: dict[tuple[int, str], cp_model.IntVar] = {}
 
     for di, day_name, cfg in day_configs:
         active_meals = []
@@ -694,24 +831,10 @@ def solve(
                     var = model.NewBoolVar(f"x_{di}_{mt}_{recipe.id}")
                     x[(di, mt, recipe.id)] = var
 
-        # Snack variables
+        # Snack variables — one bool per recipe per day
         if cfg.snack_count != 0:
-            sc = cfg.snack_count
-            # Required slots
-            required = 0 if sc == -1 else sc
-            # Optional slots (up to pool size)
-            total_slots = snack_pool_size if sc == -1 else max(sc, snack_pool_size)
-
-            for slot_i in range(total_slots):
-                is_required = slot_i < required
-                # One var per recipe for this slot
-                for recipe in pool["SNACK"]:
-                    var = model.NewBoolVar(f"x_{di}_SNACK_{slot_i}_{recipe.id}")
-                    x[(di, f"SNACK_{slot_i}", recipe.id)] = var
-                # NULL_SNACK sentinel for optional slots
-                if not is_required:
-                    var = model.NewBoolVar(f"x_{di}_SNACK_{slot_i}_{NULL_SNACK}")
-                    x[(di, f"SNACK_{slot_i}", NULL_SNACK)] = var
+            for recipe in pool["SNACK"]:
+                x_snack[(di, recipe.id)] = model.NewBoolVar(f"x_snack_{di}_{recipe.id}")
 
     # -----------------------------------------------------------------------
     # Decision variables: y[batch_group_index][recipe_id] in {0,1}
@@ -743,34 +866,18 @@ def solve(
                     raise ValueError(f"INFEASIBLE: No eligible {mt} recipes for {day_name}")
                 model.Add(sum(slot_vars) == 1)
 
-        # Snack constraints
+        # H1 snack: fixed count or unlimited (variable)
         if cfg.snack_count != 0:
-            sc = cfg.snack_count
-            required = 0 if sc == -1 else sc
-            total_slots = snack_pool_size if sc == -1 else max(sc, snack_pool_size)
-
-            for slot_i in range(total_slots):
-                is_required = slot_i < required
-                slot_key = f"SNACK_{slot_i}"
-                slot_vars = [x[(di, slot_key, r.id)] for r in pool["SNACK"] if (di, slot_key, r.id) in x]
-                if is_required:
-                    if slot_vars:
-                        model.Add(sum(slot_vars) == 1)
-                else:
-                    null_var = x.get((di, slot_key, NULL_SNACK))
-                    if null_var is not None:
-                        all_vars = slot_vars + [null_var]
-                        model.Add(sum(all_vars) == 1)
-
-            # Each recipe used at most once per day across all snack slots
-            for recipe in pool["SNACK"]:
-                recipe_snack_vars = [
-                    x[(di, f"SNACK_{slot_i}", recipe.id)]
-                    for slot_i in range(total_slots)
-                    if (di, f"SNACK_{slot_i}", recipe.id) in x
-                ]
-                if recipe_snack_vars:
-                    model.Add(sum(recipe_snack_vars) <= 1)
+            snack_vars = [x_snack[(di, r.id)] for r in pool["SNACK"] if (di, r.id) in x_snack]
+            if cfg.snack_count > 0:
+                if not snack_vars:
+                    raise ValueError(f"INFEASIBLE: No eligible SNACK recipes for {day_name}")
+                model.Add(sum(snack_vars) == cfg.snack_count)
+            else:
+                # snack_count == -1: nutritional objective drives selection,
+                # but cap at 3 per day to prevent extreme snack stacking.
+                if snack_vars:
+                    model.Add(sum(snack_vars) <= 3)
 
     # -----------------------------------------------------------------------
     # H2 — Batch group consistency
@@ -815,6 +922,17 @@ def solve(
                         model.Add(v1 + v2 <= 1)
 
     # -----------------------------------------------------------------------
+    # Pinned meals (swap_meal partial replanning)
+    # Pin all provided meal assignments to their current recipe, forcing the
+    # solver to only optimise the remaining free slots.
+    # -----------------------------------------------------------------------
+    if pinned_meals:
+        for (di, mt, recipe_id), _ in pinned_meals.items():
+            key = (di, mt, recipe_id)
+            if key in x:
+                model.Add(x[key] == 1)
+
+    # -----------------------------------------------------------------------
     # Protein powder variables (integer, scaled by POWDER_SCALE)
     # -----------------------------------------------------------------------
     use_powder = (
@@ -854,31 +972,53 @@ def solve(
                     result.append((x[key], nutrition.get(r.id, RecipeNutrition())))
         # Snacks
         if cfg.snack_count != 0:
-            sc = cfg.snack_count
-            total_slots = snack_pool_size if sc == -1 else max(sc, snack_pool_size)
-            for slot_i in range(total_slots):
-                for r in pool["SNACK"]:
-                    key = (di, f"SNACK_{slot_i}", r.id)
-                    if key in x:
-                        result.append((x[key], nutrition.get(r.id, RecipeNutrition())))
+            for r in pool["SNACK"]:
+                key = (di, r.id)
+                if key in x_snack:
+                    result.append((x_snack[key], nutrition.get(r.id, RecipeNutrition())))
         return result
 
     # -----------------------------------------------------------------------
     # H4 — Per-day hard bounds
     # -----------------------------------------------------------------------
+    # Skipped on the relaxed retry pass (_relax_bounds=True) so the solver can
+    # always return *something* rather than INFEASIBLE.
     # Use SCALE=10 for integer arithmetic (1 unit = 0.1 kcal / 0.1g macro).
     # powder_vars[di] is in units of 0.1g (scaled by POWDER_SCALE=10).
     # Coefficient for powder kcal at SCALE units: kcalPer100g / (100 * POWDER_SCALE) * SCALE
     #   = kcalPer100g / (100 * 10) * 10 = kcalPer100g / 100
     SCALE = 10
-    for di, _, _ in day_configs:
+    for di, _, cfg in day_configs:
+        if _relax_bounds:
+            continue
         day_vars = _day_meal_vars(di)
         if not day_vars:
             continue
 
+        # Apply implicit kcal bounds only to variable-snack days, and only when
+        # no explicit per-day bounds are configured.  When the user has set an
+        # explicit maxKcalPerDay we honour only that and add no implicit floor,
+        # preserving backward-compatibility with legacy schema plans.
+        if cfg.snack_count == -1 and goals.min_kcal is None and goals.max_kcal is None:
+            active_meals = sum([cfg.breakfast, cfg.lunch, cfg.dinner])
+            # Days with 2+ meal slots use a tight 95% floor so CP-SAT pins snack
+            # count almost uniquely per day (fast proof of optimality). Dinner-only
+            # or single-meal days use a generous 50% floor to stay feasible.
+            if active_meals <= 1:
+                day_kcal_floor = goals.kcal_target * 0.50
+            else:
+                day_kcal_floor = goals.kcal_target * 0.95
+            day_kcal_ceil = _kcal_ceil
+        elif cfg.snack_count == -1:
+            day_kcal_floor = goals.min_kcal
+            day_kcal_ceil  = _kcal_ceil
+        else:
+            day_kcal_floor = goals.min_kcal
+            day_kcal_ceil  = goals.max_kcal
+
         for bound, field, is_lower in [
-            (goals.min_kcal,    "kcal",    True),
-            (goals.max_kcal,    "kcal",    False),
+            (day_kcal_floor,    "kcal",    True),
+            (day_kcal_ceil,     "kcal",    False),
             (goals.min_protein, "protein", True),
             (goals.max_protein, "protein", False),
             (goals.min_fat,     "fat",     True),
@@ -926,12 +1066,9 @@ def solve(
                 if is_batch:
                     continue
                 if mt == "SNACK":
-                    sc = cfg.snack_count
-                    total_slots = snack_pool_size if sc == -1 else max(sc, snack_pool_size)
-                    for slot_i in range(total_slots):
-                        key = (di, f"SNACK_{slot_i}", recipe.id)
-                        if key in x:
-                            appearances.append(x[key])
+                    key = (di, recipe.id)
+                    if key in x_snack:
+                        appearances.append(x_snack[key])
                 else:
                     key = (di, mt, recipe.id)
                     if key in x:
@@ -968,15 +1105,9 @@ def solve(
                 window_vars = []
                 for di in window_days_idx:
                     if mt == "SNACK":
-                        cfg = next((c for d, _, c in day_configs if d == di), None)
-                        if cfg is None:
-                            continue
-                        sc = cfg.snack_count
-                        total_slots = snack_pool_size if sc == -1 else max(sc, snack_pool_size)
-                        for slot_i in range(total_slots):
-                            key = (di, f"SNACK_{slot_i}", recipe.id)
-                            if key in x:
-                                window_vars.append(x[key])
+                        key = (di, recipe.id)
+                        if key in x_snack:
+                            window_vars.append(x_snack[key])
                     else:
                         key = (di, mt, recipe.id)
                         if key in x:
@@ -1053,6 +1184,24 @@ def solve(
 
     # Recency penalty terms
     penalty_weight = PENALTY_WEIGHT[variety.level]
+
+    # Adjust history_index for manual removals: each removal makes the recipe
+    # appear more recently used, increasing its recency penalty so it's less
+    # likely to be scheduled again soon.  We shift lastScheduledDate forward
+    # by 14 days per removal (capped at yesterday so it stays in the past).
+    yesterday = start_date - datetime.timedelta(days=1)
+    for recipe_id, rating in ratings.items():
+        if rating.times_manually_removed <= 0:
+            continue
+        shift = datetime.timedelta(days=14 * rating.times_manually_removed)
+        for meal_type in MEAL_TYPES:
+            group = _recency_group(meal_type, variety)
+            key = (group, recipe_id)
+            base = history_index.get(key, start_date - datetime.timedelta(days=999))
+            adjusted = min(base + shift, yesterday)
+            if key not in history_index or adjusted > history_index[key]:
+                history_index[key] = adjusted
+
     within_week_index: dict[tuple[str, str], datetime.date] = {}
     recency_terms = []
 
@@ -1068,26 +1217,25 @@ def solve(
                 pen = compute_recency_penalty(
                     recipe.id, mt, variety, history_index, within_week_index, ref_date
                 )
+                pen = _apply_rating_multiplier(pen, ratings.get(recipe.id))
                 if pen > 0:
                     coeff = _int_coeff(penalty_weight * pen, OBJ_SCALE)
                     recency_terms.append(coeff * x[key])
                 slot_updates.append((_recency_group(mt, variety), recipe.id))
 
         if cfg.snack_count != 0:
-            sc = cfg.snack_count
-            total_slots = snack_pool_size if sc == -1 else max(sc, snack_pool_size)
-            for slot_i in range(total_slots):
-                for recipe in pool["SNACK"]:
-                    key = (di, f"SNACK_{slot_i}", recipe.id)
-                    if key not in x:
-                        continue
-                    pen = compute_recency_penalty(
-                        recipe.id, "SNACK", variety, history_index, within_week_index, ref_date
-                    )
-                    if pen > 0:
-                        coeff = _int_coeff(penalty_weight * pen, OBJ_SCALE)
-                        recency_terms.append(coeff * x[key])
-                    slot_updates.append((_recency_group("SNACK", variety), recipe.id))
+            for recipe in pool["SNACK"]:
+                key = (di, recipe.id)
+                if key not in x_snack:
+                    continue
+                pen = compute_recency_penalty(
+                    recipe.id, "SNACK", variety, history_index, within_week_index, ref_date
+                )
+                pen = _apply_rating_multiplier(pen, ratings.get(recipe.id))
+                if pen > 0:
+                    coeff = _int_coeff(penalty_weight * pen, OBJ_SCALE)
+                    recency_terms.append(coeff * x_snack[key])
+                slot_updates.append((_recency_group("SNACK", variety), recipe.id))
 
         # Update within-week index after scoring this slot so later slots in the
         # same week treat these candidates as "used today" when computing penalties.
@@ -1110,6 +1258,7 @@ def solve(
             pen = compute_recency_penalty(
                 recipe.id, bg.meal, variety, history_index, within_week_index, ref_date
             )
+            pen = _apply_rating_multiplier(pen, ratings.get(recipe.id))
             if pen > 0:
                 coeff = _int_coeff(penalty_weight * pen, OBJ_SCALE)
                 recency_terms.append(coeff * y[(gi, recipe.id)])
@@ -1140,13 +1289,10 @@ def solve(
                     if key in x:
                         appearance_vars.append(x[key])
                     # Snack slots
-                    if mt == "SNACK" and cfg.snack_count != 0:
-                        sc = cfg.snack_count
-                        total_slots = snack_pool_size if sc == -1 else max(sc, snack_pool_size)
-                        for slot_i in range(total_slots):
-                            key = (di, f"SNACK_{slot_i}", recipe.id)
-                            if key in x:
-                                appearance_vars.append(x[key])
+                    elif mt == "SNACK" and cfg.snack_count != 0:
+                        key = (di, recipe.id)
+                        if key in x_snack:
+                            appearance_vars.append(x_snack[key])
         if not appearance_vars:
             continue
         count_var = model.NewIntVar(0, len(appearance_vars), f"rule_{rule.id}_count")
@@ -1197,12 +1343,43 @@ def solve(
     # -----------------------------------------------------------------------
     # Solve
     # -----------------------------------------------------------------------
+    t_model_built = time.perf_counter()
+    proto = model.Proto()
+    n_vars = len(proto.variables)
+    n_constrs = len(proto.constraints)
+    logger.info(
+        "optimizer.solve model_built build_ms=%.0f vars=%d constraints=%d",
+        (t_model_built - t_solve_start) * 1000,
+        n_vars,
+        n_constrs,
+    )
+
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 30.0
     solver.parameters.num_search_workers = 4
     status = solver.Solve(model)
 
+    t_solved = time.perf_counter()
+    logger.info(
+        "optimizer.solve done status=%s solve_ms=%.0f total_ms=%.0f "
+        "solver_wall_s=%.3f objective=%s",
+        solver.StatusName(status),
+        (t_solved - t_model_built) * 1000,
+        (t_solved - t_solve_start) * 1000,
+        solver.WallTime(),
+        f"{solver.ObjectiveValue():.1f}" if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else "n/a",
+    )
+
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        if not _relax_bounds:
+            logger.warning("optimizer.solve INFEASIBLE, retrying without per-day macro/kcal bounds")
+            result = solve(
+                eligible_recipes, settings, nutrition, ratings,
+                history_index, start_date, ingredients_raw, pinned_meals,
+                _relax_bounds=True,
+            )
+            result["approximate"] = True
+            return result
         raise ValueError("INFEASIBLE: No valid meal plan could be constructed with the given constraints")
 
     # -----------------------------------------------------------------------
@@ -1224,17 +1401,10 @@ def solve(
 
         # Snacks
         if cfg.snack_count != 0:
-            sc = cfg.snack_count
-            total_slots = snack_pool_size if sc == -1 else max(sc, snack_pool_size)
-            for slot_i in range(total_slots):
-                slot_key = f"SNACK_{slot_i}"
-                null_val = solver.Value(x[(di, slot_key, NULL_SNACK)]) if (di, slot_key, NULL_SNACK) in x else 0
-                if null_val == 1:
-                    continue  # omit null snack from output
-                for recipe in pool["SNACK"]:
-                    key = (di, slot_key, recipe.id)
-                    if key in x and solver.Value(x[key]) == 1:
-                        meals_out.append({"type": "SNACK", "recipeId": recipe.id})
+            for recipe in pool["SNACK"]:
+                key = (di, recipe.id)
+                if key in x_snack and solver.Value(x_snack[key]) == 1:
+                    meals_out.append({"type": "SNACK", "recipeId": recipe.id})
 
         # Compute actual macros for the day
         day_kcal = sum(nutrition[m["recipeId"]].kcal for m in meals_out if m["recipeId"] in nutrition)
@@ -1283,7 +1453,7 @@ def solve(
 # Cloud Function entry point
 # ---------------------------------------------------------------------------
 
-@https_fn.on_call(timeout_sec=60)
+@https_fn.on_call(timeout_sec=60, region="europe-north1", memory=options.MemoryOption.MB_512)
 def optimise_meal_plan(req: https_fn.CallableRequest) -> dict:
     """
     Firebase callable Cloud Function.
@@ -1304,8 +1474,14 @@ def optimise_meal_plan(req: https_fn.CallableRequest) -> dict:
         raise https_fn.HttpsError(code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT, message="startDate must be ISO format YYYY-MM-DD")
 
     db = admin_firestore.client()
+    request_id = str(uuid.uuid4())[:8]
 
     try:
+        t0 = time.perf_counter()
+        rss0 = _rss_mb()
+        logger.info("optimise_meal_plan.start request_id=%s user_id=%s start_date=%s rss_mb=%.1f",
+                    request_id, user_id, start_date_str, rss0)
+
         # 1. Read settings first to get variety level for the recency window query
         raw_settings_data = _read_settings_doc(db, user_id)
         variety_level = raw_settings_data.get("variety", {}).get("level", "BALANCED")
@@ -1315,6 +1491,9 @@ def optimise_meal_plan(req: https_fn.CallableRequest) -> dict:
         )
         if not settings_data:
             settings_data = raw_settings_data
+        t1 = time.perf_counter()
+        logger.info("optimise_meal_plan.read request_id=%s ms=%.0f recipes=%d ingredients=%d ratings=%d",
+                    request_id, (t1 - t0) * 1000, len(recipes_raw), len(ingredients_raw), len(ratings))
 
         # 2. Parse
         recipes: dict[str, Recipe] = {
@@ -1322,20 +1501,30 @@ def optimise_meal_plan(req: https_fn.CallableRequest) -> dict:
             for doc_id, data in recipes_raw.items()
         }
         settings = _parse_settings(settings_data, ratings)
+        t2 = time.perf_counter()
+        logger.info("optimise_meal_plan.parse request_id=%s ms=%.0f", request_id, (t2 - t1) * 1000)
 
         # 3. Compute nutrition
         nutrition = compute_recipe_nutrition(recipes, ingredients_raw)
+        t3 = time.perf_counter()
+        logger.info("optimise_meal_plan.nutrition request_id=%s ms=%.0f resolved=%d",
+                    request_id, (t3 - t2) * 1000, len(nutrition))
 
         # 4. Filter
         eligible = filter_recipes(recipes, settings, ratings, nutrition)
+        t4 = time.perf_counter()
+        logger.info("optimise_meal_plan.filter request_id=%s ms=%.0f eligible=%d",
+                    request_id, (t4 - t3) * 1000, len(eligible))
 
         # 5. History index
         history_index = build_history_index(recent_plans, settings.variety)
+        t5 = time.perf_counter()
 
         # 6. Solve
         plan = solve(
             eligible, settings, nutrition, ratings, history_index, start_date, ingredients_raw
         )
+        t6 = time.perf_counter()
 
         # 7. Write plan to Firestore
         plan_id = plan["id"]
@@ -1346,6 +1535,27 @@ def optimise_meal_plan(req: https_fn.CallableRequest) -> dict:
             .document(plan_id)
         )
         plan_ref.set(plan)
+        t7 = time.perf_counter()
+
+        rss1 = _rss_mb()
+        logger.info(
+            "optimise_meal_plan.done request_id=%s total_ms=%.0f "
+            "read_ms=%.0f parse_ms=%.0f nutrition_ms=%.0f filter_ms=%.0f "
+            "history_ms=%.0f solve_ms=%.0f write_ms=%.0f "
+            "rss_start_mb=%.1f rss_end_mb=%.1f eligible=%d plan_id=%s",
+            request_id,
+            (t7 - t0) * 1000,
+            (t1 - t0) * 1000,
+            (t2 - t1) * 1000,
+            (t3 - t2) * 1000,
+            (t4 - t3) * 1000,
+            (t5 - t4) * 1000,
+            (t6 - t5) * 1000,
+            (t7 - t6) * 1000,
+            rss0, rss1,
+            len(eligible),
+            plan_id,
+        )
 
         return {"success": True, "planId": plan_id}
 
@@ -1365,3 +1575,270 @@ def optimise_meal_plan(req: https_fn.CallableRequest) -> dict:
             code=https_fn.FunctionsErrorCode.INTERNAL,
             message=str(exc),
         )
+
+
+# ---------------------------------------------------------------------------
+# swap_meal — replace a single meal in an existing plan
+# ---------------------------------------------------------------------------
+
+@https_fn.on_call()
+def swap_meal(req: https_fn.CallableRequest) -> dict:
+    """Replace one meal in an existing plan without touching the other slots.
+
+    Request data:
+        planId   – Firestore document ID of the existing plan
+        day      – day name, e.g. "MONDAY"
+        mealType – "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK"
+    """
+    if not req.auth:
+        raise https_fn.HttpsError(code=https_fn.FunctionsErrorCode.UNAUTHENTICATED, message="auth required")
+    user_id = req.auth.uid
+
+    plan_id  = req.data.get("planId")
+    day      = req.data.get("day")
+    meal_type = req.data.get("mealType")
+    if not plan_id or not day or not meal_type:
+        raise https_fn.HttpsError(
+            code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
+            message="planId, day and mealType are required",
+        )
+
+    db = admin_firestore.client()
+    try:
+        # 1. Load the existing plan
+        plan_ref = (
+            db.collection("users").document(user_id)
+            .collection("mealPlans").document(plan_id)
+        )
+        plan_doc = plan_ref.get()
+        if not plan_doc.exists:
+            raise https_fn.HttpsError(
+                code=https_fn.FunctionsErrorCode.NOT_FOUND,
+                message=f"Plan {plan_id} not found",
+            )
+        existing_plan: dict = plan_doc.to_dict()
+
+        # 2. Load settings, ratings, ingredients and recipes
+        ingredients_raw, recipes_raw, ratings, settings_data, recent_plans = _read_firestore_data(
+            db, user_id, variety_level="BALANCED"
+        )
+        if not settings_data:
+            settings_data = _read_settings_doc(db, user_id)
+
+        recipes: dict[str, Recipe] = {
+            doc_id: _parse_recipe(doc_id, data)
+            for doc_id, data in recipes_raw.items()
+        }
+        settings = _parse_settings(settings_data, ratings)
+        nutrition = compute_recipe_nutrition(recipes, ingredients_raw)
+        eligible = filter_recipes(recipes, settings, ratings, nutrition)
+
+        # Find the recipe currently in the target slot so we can exclude it
+        old_recipe_id: str | None = None
+        start_date_str = existing_plan.get("startDate")
+        if isinstance(start_date_str, str):
+            start_date = datetime.date.fromisoformat(start_date_str)
+        else:
+            start_date = datetime.date.today()
+
+        for day_data in existing_plan.get("days", []):
+            if day_data.get("dayOfWeek") == day:
+                for meal in day_data.get("meals", []):
+                    if meal.get("type") == meal_type:
+                        old_recipe_id = meal.get("recipeId")
+                        break
+                break
+
+        # 3. Build a set of all currently assigned meals (to pin) and exclude
+        #    the old recipe so the optimizer is forced to pick a different one.
+        pinned: dict[tuple[int, str, str], str] = {}  # (day_idx, meal_type, recipe_id)
+        for day_data in existing_plan.get("days", []):
+            d_name = day_data.get("dayOfWeek", "")
+            d_idx = DAY_NAMES.index(d_name) if d_name in DAY_NAMES else None
+            if d_idx is None:
+                continue
+            for meal in day_data.get("meals", []):
+                mt = meal.get("type", "")
+                rid = meal.get("recipeId", "")
+                if mt and rid:
+                    if not (d_name == day and mt == meal_type):
+                        pinned[(d_idx, mt, rid)] = rid
+
+        extra_excluded = set(settings.excluded_recipe_ids)
+        if old_recipe_id:
+            extra_excluded.add(old_recipe_id)
+
+        settings_for_swap = Settings(
+            meal_slots=settings.meal_slots,
+            batch_groups=settings.batch_groups,
+            goals=settings.goals,
+            variety=settings.variety,
+            protein_powder=settings.protein_powder,
+            diet_excluded_ingredient_ids=settings.diet_excluded_ingredient_ids,
+            excluded_recipe_ids=extra_excluded,
+            rules=settings.rules,
+        )
+        eligible_for_swap = filter_recipes(recipes, settings_for_swap, ratings, nutrition)
+
+        history_index = build_history_index(recent_plans, settings.variety)
+
+        # 4. Solve with pins — the solver receives pinned assignments as part of
+        #    the model via the `pinned_meals` argument
+        new_plan = solve(
+            eligible_for_swap,
+            settings_for_swap,
+            nutrition,
+            ratings,
+            history_index,
+            start_date,
+            ingredients_raw,
+            pinned_meals=pinned,
+        )
+
+        # 5. Extract the new meal for the target slot
+        new_recipe_id: str | None = None
+        for day_data in new_plan.get("days", []):
+            if day_data.get("dayOfWeek") == day:
+                for meal in day_data.get("meals", []):
+                    if meal.get("type") == meal_type:
+                        new_recipe_id = meal.get("recipeId")
+                        break
+                break
+
+        if new_recipe_id is None:
+            raise ValueError("Optimizer could not find a replacement meal")
+
+        # 6. Patch the Firestore plan with the new meal only
+        updated_days = []
+        for day_data in existing_plan.get("days", []):
+            if day_data.get("dayOfWeek") == day:
+                updated_meals = []
+                for meal in day_data.get("meals", []):
+                    if meal.get("type") == meal_type:
+                        updated_meals.append({"type": meal_type, "recipeId": new_recipe_id})
+                    else:
+                        updated_meals.append(meal)
+                updated_days.append({**day_data, "meals": updated_meals})
+            else:
+                updated_days.append(day_data)
+
+        plan_ref.update({"days": updated_days})
+
+        # 7. Increment timesManuallyRemoved for the old recipe
+        if old_recipe_id:
+            rating_ref = (
+                db.collection("users").document(user_id)
+                .collection("ratings").document(old_recipe_id)
+            )
+            rating_ref.set(
+                {"timesManuallyRemoved": admin_firestore.Increment(1)},
+                merge=True,
+            )
+
+        return {"success": True, "newRecipeId": new_recipe_id}
+
+    except https_fn.HttpsError:
+        raise
+    except ValueError as exc:
+        msg = str(exc)
+        if "INFEASIBLE" in msg:
+            raise https_fn.HttpsError(
+                code=https_fn.FunctionsErrorCode.FAILED_PRECONDITION, message=msg
+            )
+        raise https_fn.HttpsError(code=https_fn.FunctionsErrorCode.INTERNAL, message=msg)
+    except Exception as exc:  # noqa: BLE001
+        raise https_fn.HttpsError(code=https_fn.FunctionsErrorCode.INTERNAL, message=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# init_onboarding — write initial settings + ratings, generate first plan
+# ---------------------------------------------------------------------------
+
+@https_fn.on_call()
+def init_onboarding(req: https_fn.CallableRequest) -> dict:
+    """Set up a new user's settings, seed ratings from their favorite recipes,
+    and generate and return the first meal plan.
+
+    Request data:
+        goals            – { kcalTarget, proteinTarget, fatTarget, carbsTarget }
+        days             – { MONDAY: { breakfast, lunch, dinner, snacks }, ... }
+        batchGroups      – [ { meal, days: [day names] }, ... ]  (optional)
+        proteinPowder    – { enabled, ingredientId, name, proteinPer100g, kcalPer100g } | null
+        favoriteRecipeIds – list of recipe IDs the user selected during onboarding
+        startDate        – ISO date string for the first plan week
+    """
+    if not req.auth:
+        raise https_fn.HttpsError(code=https_fn.FunctionsErrorCode.UNAUTHENTICATED, message="auth required")
+    user_id = req.auth.uid
+
+    start_date_str = req.data.get("startDate", datetime.date.today().isoformat())
+    try:
+        start_date = datetime.date.fromisoformat(start_date_str)
+    except ValueError:
+        raise https_fn.HttpsError(
+            code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
+            message="startDate must be ISO format YYYY-MM-DD",
+        )
+
+    db = admin_firestore.client()
+    try:
+        settings_data = {
+            "goals":           req.data.get("goals", {}),
+            "days":            req.data.get("days", {}),
+            "batchGroups":     req.data.get("batchGroups", []),
+            "proteinPowder":   req.data.get("proteinPowder"),
+            "dietaryRestrictions": req.data.get("dietaryRestrictions", {}),
+        }
+
+        # 1. Write settings
+        settings_ref = (
+            db.collection("users").document(user_id)
+            .collection("settings").document(SETTINGS_DOC_ID)
+        )
+        settings_ref.set(settings_data)
+
+        # 2. Seed ratings for favourite recipes
+        batch = db.batch()
+        for recipe_id in req.data.get("favoriteRecipeIds", []):
+            rating_ref = (
+                db.collection("users").document(user_id)
+                .collection("ratings").document(recipe_id)
+            )
+            batch.set(rating_ref, {"stars": 4}, merge=True)
+        batch.commit()
+
+        # 3. Load full data and generate first plan
+        ingredients_raw, recipes_raw, ratings, _, recent_plans = _read_firestore_data(
+            db, user_id, variety_level="BALANCED"
+        )
+        recipes: dict[str, Recipe] = {
+            doc_id: _parse_recipe(doc_id, data)
+            for doc_id, data in recipes_raw.items()
+        }
+        settings = _parse_settings(settings_data, ratings)
+        nutrition = compute_recipe_nutrition(recipes, ingredients_raw)
+        eligible = filter_recipes(recipes, settings, ratings, nutrition)
+        history_index = build_history_index(recent_plans, settings.variety)
+
+        plan = solve(eligible, settings, nutrition, ratings, history_index, start_date, ingredients_raw)
+
+        plan_id = plan["id"]
+        plan_ref = (
+            db.collection("users").document(user_id)
+            .collection("mealPlans").document(plan_id)
+        )
+        plan_ref.set(plan)
+
+        return {"success": True, "planId": plan_id}
+
+    except https_fn.HttpsError:
+        raise
+    except ValueError as exc:
+        msg = str(exc)
+        if "INFEASIBLE" in msg:
+            raise https_fn.HttpsError(
+                code=https_fn.FunctionsErrorCode.FAILED_PRECONDITION, message=msg
+            )
+        raise https_fn.HttpsError(code=https_fn.FunctionsErrorCode.INTERNAL, message=msg)
+    except Exception as exc:  # noqa: BLE001
+        raise https_fn.HttpsError(code=https_fn.FunctionsErrorCode.INTERNAL, message=str(exc))

@@ -1,0 +1,20 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "python314",
+      "ignore": [
+        "venv",
+        ".venv",
+        "__pycache__",
+        "*.pyc",
+        ".pytest_cache",
+        "tests"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

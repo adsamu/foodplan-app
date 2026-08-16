@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// TEMPORARY: the app has no Firebase Auth yet and uses a hardcoded
+// "default_user" (see optimizer_brief.md). These rules just unblock the
+// client SDK's direct reads/writes under users/** for that pre-auth state.
+// Once Auth is added, replace with rules that check
+// request.auth != null && request.auth.uid == userId.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Global recipe/ingredient catalogs, shared across users (no per-user
+    // prefix — see optimizer_brief.md). Same pre-auth "allow all" as above.
+    match /recipes/{recipeId} {
+      allow read, write: if true;
+    }
+    match /ingredients/{ingredientId} {
+      allow read, write: if true;
+    }
+  }
+}

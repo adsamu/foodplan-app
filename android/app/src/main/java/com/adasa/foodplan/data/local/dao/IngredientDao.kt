@@ -23,4 +23,7 @@ interface IngredientDao {
 
     @Delete
     suspend fun deleteIngredient(ingredient: IngredientEntity)
+
+    @Query("DELETE FROM ingredients WHERE id = :id")
+    suspend fun deleteIngredientById(id: String)
 }

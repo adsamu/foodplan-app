@@ -4,7 +4,8 @@ import com.adasa.foodplan.data.repository.IngredientRepository
 import com.adasa.foodplan.data.repository.MealPlanRepository
 import com.adasa.foodplan.data.repository.RecipeRepository
 import com.adasa.foodplan.domain.model.*
-import kotlinx.coroutines.flow.first
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -13,11 +14,17 @@ import javax.inject.Singleton
 class DatabaseSeeder @Inject constructor(
     private val ingredientRepository: IngredientRepository,
     private val recipeRepository: RecipeRepository,
-    private val mealPlanRepository: MealPlanRepository
+    private val mealPlanRepository: MealPlanRepository,
+    private val firestore: FirebaseFirestore
 ) {
+    /**
+     * Seeds the shared Firestore recipes/ingredients collections exactly once —
+     * checked directly against Firestore (not the Room cache, which starts empty
+     * on every fresh install regardless of whether the cloud data already exists).
+     */
     suspend fun seedIfEmpty() {
-        val existing = ingredientRepository.getAllIngredients().first()
-        if (existing.isNotEmpty()) return
+        val existing = firestore.collection("ingredients").limit(1).get().await()
+        if (!existing.isEmpty) return
         seedIngredients()
         seedRecipes()
         seedMealPlan()
